@@ -57,31 +57,110 @@ function InputField({ label, hint, value, onChange, prefix = 'Rp' }) {
   )
 }
 
+function TextField({ label, hint, value, onChange, placeholder }) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      <label style={{
+        display: 'block',
+        fontSize: '12px',
+        fontWeight: '600',
+        color: 'var(--gray-600)',
+        marginBottom: '6px',
+        letterSpacing: '0.4px',
+        textTransform: 'uppercase',
+      }}>{label}</label>
+      {hint && (
+        <p style={{ fontSize: '12px', color: 'var(--gray-400)', marginBottom: '8px' }}>{hint}</p>
+      )}
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        style={{
+          width: '100%',
+          padding: '12px 14px',
+          border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--gray-200)',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--gray-50)',
+          fontSize: '15px',
+          color: 'var(--gray-800)',
+          fontWeight: '500',
+          transition: 'border-color var(--transition)',
+        }}
+      />
+    </div>
+  )
+}
+
+function DateField({ label, value, onChange }) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      <label style={{
+        display: 'block',
+        fontSize: '12px',
+        fontWeight: '600',
+        color: 'var(--gray-600)',
+        marginBottom: '6px',
+        letterSpacing: '0.4px',
+        textTransform: 'uppercase',
+      }}>{label}</label>
+      <input
+        type="date"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          width: '100%',
+          padding: '12px 14px',
+          border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--gray-200)',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--gray-50)',
+          fontSize: '15px',
+          color: 'var(--gray-800)',
+          fontWeight: '500',
+          transition: 'border-color var(--transition)',
+        }}
+      />
+    </div>
+  )
+}
+
 export default function SetupSesi({ onSesiDibuat }) {
+  const todayIso = new Date().toISOString().split('T')[0]
+
+  const [sessionName, setSessionName] = useState('')
+  const [sessionDate, setSessionDate] = useState(todayIso)
   const [cockPrice, setCockPrice] = useState('')
   const [courtFee, setCourtFee] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const today = new Date().toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  })
+  const formattedDate = sessionDate
+    ? new Date(sessionDate + 'T00:00:00').toLocaleDateString('id-ID', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      })
+    : ''
 
   async function handleMulai(e) {
     e.preventDefault()
-    if (!cockPrice || !courtFee) {
+    if (!sessionName.trim() || !cockPrice || !courtFee) {
       setError('Isi semua field dulu ya.')
       return
     }
     setLoading(true)
     setError('')
 
-    // Cek apakah sesi hari ini sudah ada
-    const todayIso = new Date().toISOString().split('T')[0]
+    // Cek apakah sesi di tanggal ini sudah ada
     const { data: existing } = await supabase
       .from('sessions')
       .select('*')
-      .eq('date', todayIso)
+      .eq('date', sessionDate)
       .maybeSingle()
 
     if (existing) {
@@ -92,7 +171,8 @@ export default function SetupSesi({ onSesiDibuat }) {
     const { data, error: err } = await supabase
       .from('sessions')
       .insert({
-        date: todayIso,
+        name: sessionName.trim(),
+        date: sessionDate,
         cock_price_per_piece: parseInt(cockPrice),
         court_fee_nonmember: parseInt(courtFee),
       })
@@ -135,7 +215,7 @@ export default function SetupSesi({ onSesiDibuat }) {
           fontSize: '13px',
           color: 'var(--gray-400)',
           marginTop: '4px',
-        }}>{today}</p>
+        }}>{formattedDate}</p>
       </div>
 
       {/* Card */}
@@ -148,6 +228,18 @@ export default function SetupSesi({ onSesiDibuat }) {
         width: '100%',
       }}>
         <form onSubmit={handleMulai}>
+          <TextField
+            label="Nama sesi"
+            hint="Mis. Mabar Rabu, Mabar Pagi"
+            value={sessionName}
+            onChange={setSessionName}
+            placeholder="Mabar Rabu"
+          />
+          <DateField
+            label="Tanggal main (match day)"
+            value={sessionDate}
+            onChange={setSessionDate}
+          />
           <InputField
             label="Harga cock per biji"
             hint="Sesuai merek yang dipakai hari ini"
@@ -171,7 +263,7 @@ export default function SetupSesi({ onSesiDibuat }) {
           )}
 
           {/* Preview perhitungan */}
-          {cockPrice && courtFee && (
+          {sessionName.trim() && cockPrice && courtFee && (
             <div style={{
               background: 'var(--blue-light)',
               borderRadius: 'var(--radius-sm)',
@@ -181,6 +273,12 @@ export default function SetupSesi({ onSesiDibuat }) {
               <p style={{ fontSize: '12px', color: 'var(--blue)', fontWeight: '600', marginBottom: '8px' }}>
                 RINGKASAN
               </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>Sesi</span>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)' }}>
+                  {sessionName.trim()}
+                </span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>Cock per biji</span>
                 <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)' }}>
@@ -198,12 +296,12 @@ export default function SetupSesi({ onSesiDibuat }) {
 
           <button
             type="submit"
-            disabled={loading || !cockPrice || !courtFee}
+            disabled={loading || !sessionName.trim() || !cockPrice || !courtFee}
             style={{
               width: '100%',
               padding: '14px',
-              background: loading || !cockPrice || !courtFee ? 'var(--gray-200)' : 'var(--navy)',
-              color: loading || !cockPrice || !courtFee ? 'var(--gray-400)' : 'var(--white)',
+              background: loading || !sessionName.trim() || !cockPrice || !courtFee ? 'var(--gray-200)' : 'var(--navy)',
+              color: loading || !sessionName.trim() || !cockPrice || !courtFee ? 'var(--gray-400)' : 'var(--white)',
               borderRadius: 'var(--radius-sm)',
               fontSize: '15px',
               fontWeight: '600',

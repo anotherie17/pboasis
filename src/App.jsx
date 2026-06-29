@@ -3,11 +3,14 @@ import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import SetupSesi from './pages/SetupSesi'
 import CheckIn from './pages/CheckIn'
+import CatatGame from './pages/CatatGame'
+import Iuran from './pages/Iuran'
+import Rekap from './pages/Rekap'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [sesi, setSesi] = useState(null)
-  const [page, setPage] = useState('checkin') // checkin | main
+  const [page, setPage] = useState('checkin') // checkin | game | iuran | rekap
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
@@ -37,24 +40,27 @@ export default function App() {
   if (!sesi) return <SetupSesi onSesiDibuat={setSesi} />
 
   if (page === 'checkin') return (
-    <CheckIn sesi={sesi} onLanjut={() => setPage('main')} />
+    <CheckIn sesi={sesi} onLanjut={() => setPage('game')} />
   )
 
-  // Placeholder sprint 3
+  if (page === 'game') return (
+    <CatatGame
+      sesi={sesi}
+      onBack={() => setPage('checkin')}
+      onLanjut={() => setPage('iuran')}
+    />
+  )
+
+  if (page === 'iuran') return (
+    <Iuran
+      sesi={sesi}
+      onBack={() => setPage('game')}
+      onLanjut={() => setPage('rekap')}
+    />
+  )
+
+  // page === 'rekap'
   return (
-    <div style={{ padding: '24px' }}>
-      <p style={{ color: 'var(--navy)', fontWeight: '600' }}>
-        ✅ Check-in selesai — Sprint 3: Catat Game
-      </p>
-      <button
-        onClick={() => setPage('checkin')}
-        style={{
-          marginTop: '12px', padding: '10px 16px',
-          background: 'var(--blue)', color: 'var(--white)',
-          borderRadius: 'var(--radius-sm)', fontSize: '14px',
-        }}>
-        ← Balik ke Check-in
-      </button>
-    </div>
+    <Rekap sesi={sesi} onBack={() => setPage('iuran')} />
   )
 }
