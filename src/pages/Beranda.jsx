@@ -15,7 +15,7 @@ function isToday(iso) {
   return iso === new Date().toISOString().split('T')[0]
 }
 
-export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
+export default function Beranda({ onSesiBaru, onBukaSesi, onMember, onPemain }) {
   const dlg = useDialog()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -71,13 +71,24 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
       </button>
 
       <button className="glass" onClick={onMember}
-        style={{ width: '100%', borderRadius: 20, padding: 15, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 20, textAlign: 'left' }}>
+        style={{ width: '100%', borderRadius: 20, padding: 15, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 12, textAlign: 'left' }}>
         <span style={{ width: 42, height: 42, borderRadius: 13, background: 'linear-gradient(135deg,#6f5ae0,#4233a8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
           <Icon name="star" size={20} />
         </span>
         <span>
           <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#fff' }}>Daftar member</span>
           <span style={{ display: 'block', fontSize: 12, color: 'var(--t-3)', marginTop: 1 }}>Atur member per periode</span>
+        </span>
+      </button>
+
+      <button className="glass" onClick={onPemain}
+        style={{ width: '100%', borderRadius: 20, padding: 15, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 20, textAlign: 'left' }}>
+        <span style={{ width: 42, height: 42, borderRadius: 13, background: 'linear-gradient(135deg,#3aa0a0,#1f6e6e)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+          <Icon name="user" size={20} />
+        </span>
+        <span>
+          <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#fff' }}>Kelola pemain</span>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--t-3)', marginTop: 1 }}>Ubah nama / hapus pemain</span>
         </span>
       </button>
 

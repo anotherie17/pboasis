@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
 import { Icon } from '../components/ui'
 import { useDialog } from '../components/Dialog'
+import { supabase } from '../lib/supabase'
 import { hitungIuran, rupiah } from '../lib/iuran'
 
 function formatTanggal(iso) {
@@ -45,63 +45,97 @@ export default function TabRekap({ sesi }) {
     try {
       const h = hitungIuran(sesi, attendees, games)
       const doc = new lib.jsPDF({ unit: 'mm', format: 'a4' })
-      const navy = [3, 30, 83], blue = [19, 104, 200], gray = [120, 128, 140], M = 16, W = 210
-      let y = 0
-      doc.setFillColor(...navy); doc.rect(0, 0, W, 30, 'F')
-      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('PB OASIS', M, 14)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(200, 215, 240); doc.text('Rekap Sesi Mabar', M, 21)
-      y = 42; doc.setTextColor(...navy); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(sesi.name || 'Sesi Mabar', M, y)
-      y += 6; doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...gray); doc.text(formatTanggal(sesi.date), M, y)
+      const navy = [3, 30, 83], blue = [19, 104, 200], gray = [120, 128, 140], dark = [40, 46, 58]
+      const M = 14, W = 210, RIGHT = W - M
 
-      y += 10
+      // ---- Header band ----
+      doc.setFillColor(...navy); doc.rect(0, 0, W, 30, 'F')
+      doc.setFillColor(...blue); doc.rect(0, 30, W, 1.2, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.text('PB OASIS', M, 14)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(200, 215, 240); doc.text('Rekap Sesi Mabar', M, 21)
+      doc.setFontSize(9); doc.setTextColor(180, 200, 235)
+      doc.text(formatTanggal(sesi.date), RIGHT, 14, { align: 'right' })
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(255, 255, 255)
+      doc.text(sesi.name || 'Sesi Mabar', RIGHT, 21, { align: 'right' })
+
+      let y = 42
+
+      // ---- Dua kartu pemasukan: Lapangan & Cock ----
+      const cardW = (RIGHT - M - 6) / 2, cardH = 22
+      function incomeCard(x, label, amount, sub, tint, txt) {
+        doc.setFillColor(...tint); doc.roundedRect(x, y, cardW, cardH, 3, 3, 'F')
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...gray); doc.text(label, x + 6, y + 7)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...txt); doc.text(rupiah(amount), x + 6, y + 15)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gray); doc.text(sub, x + 6, y + 19.5)
+      }
+      incomeCard(M, 'Pemasukan lapangan', h.totalCourt, `${h.jumlahNon} non-member x ${rupiah(h.courtFee)}`, [233, 240, 251], navy)
+      incomeCard(M + cardW + 6, 'Pemasukan cock', h.totalBiayaCock, `${h.totalCock} biji x ${rupiah(h.cockPrice)}`, [251, 244, 224], [140, 95, 10])
+      y += cardH + 6
+
+      // ---- Ringkasan ----
       const sum = [
         ['Jumlah pemain', `${h.rows.length} (${h.jumlahMember} member / ${h.jumlahNon} non)`],
         ['Total game', `${h.jumlahGame}`],
-        ['Cock terpakai', `${h.totalCock} biji = ${rupiah(h.totalBiayaCock)}`],
-        ['Tarif lapangan (non-member)', rupiah(h.courtFee)],
-        ['Total tagihan', rupiah(h.totalTagihan)],
-        ['Terkumpul', rupiah(h.totalLunas)],
-        ['Sisa belum bayar', rupiah(h.totalBelum)],
+        ['Cock terpakai', `${h.totalCock} biji`],
+        ['Total tagihan', rupiah(h.totalTagihan), 'bold'],
+        ['Terkumpul', rupiah(h.totalLunas), 'green'],
+        ['Sisa belum bayar', rupiah(h.totalBelum), 'red'],
       ]
-      doc.setFillColor(247, 249, 251); doc.rect(M, y, W - M * 2, sum.length * 7 + 4, 'F'); y += 7
-      sum.forEach(([k, v]) => {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...gray); doc.text(k, M + 4, y)
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(...navy); doc.text(String(v), W - M - 4, y, { align: 'right' }); y += 7
+      const sumH = sum.length * 7 + 6
+      doc.setFillColor(247, 249, 251); doc.roundedRect(M, y, RIGHT - M, sumH, 3, 3, 'F')
+      y += 8
+      sum.forEach(([k, v, style]) => {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...gray); doc.text(k, M + 5, y)
+        if (style === 'green') doc.setTextColor(5, 150, 105)
+        else if (style === 'red') doc.setTextColor(200, 45, 45)
+        else doc.setTextColor(...navy)
+        doc.setFont('helvetica', 'bold'); doc.text(String(v), RIGHT - 5, y, { align: 'right' }); y += 7
       })
+      y += 8
 
-      y += 8; doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rincian per pemain', M, y); y += 5
-      const cols = [{ x: M }, { x: M + 11 }, { x: M + 70 }, { x: M + 96 }, { x: M + 138 }, { x: W - M }]
-      const heads = ['No', 'Nama', 'Status', 'Game', 'Iuran', 'Bayar']
-      const al = ['left', 'left', 'left', 'right', 'right', 'right']
+      // ---- Rincian per pemain ----
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text('Rincian per pemain', M, y); y += 4
+      // kolom: No | Nama | Game | Biji | Lapangan | Cock | Total | Bayar
+      const cx = { no: M, nama: M + 7, game: 76, biji: 90, lap: 122, cock: 152, total: 182, bayar: RIGHT }
       function head() {
-        doc.setFillColor(...blue); doc.rect(M, y, W - M * 2, 8, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
-        heads.forEach((t, i) => doc.text(t, cols[i].x, y + 5.5, { align: al[i] })); y += 8
+        doc.setFillColor(...blue); doc.rect(M, y, RIGHT - M, 8, 'F')
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.3)
+        doc.text('No', cx.no + 1, y + 5.4)
+        doc.text('Nama', cx.nama, y + 5.4)
+        doc.text('Game', cx.game, y + 5.4, { align: 'right' })
+        doc.text('Biji', cx.biji, y + 5.4, { align: 'right' })
+        doc.text('Lapangan', cx.lap, y + 5.4, { align: 'right' })
+        doc.text('Cock', cx.cock, y + 5.4, { align: 'right' })
+        doc.text('Total', cx.total, y + 5.4, { align: 'right' })
+        doc.text('Bayar', cx.bayar, y + 5.4, { align: 'right' })
+        y += 8
       }
-      head(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+      head(); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3)
       h.rows.forEach((r, i) => {
-        if (y > 280) { doc.addPage(); y = 18; head(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9) }
-        if (i % 2) { doc.setFillColor(247, 249, 251); doc.rect(M, y, W - M * 2, 7, 'F') }
-        doc.setTextColor(60, 66, 78)
-        doc.text(String(i + 1), cols[0].x, y + 5)
-        doc.text(r.name.length > 32 ? r.name.slice(0, 31) + '…' : r.name, cols[1].x, y + 5)
-        doc.text(r.is_member ? 'Member' : 'Non-mbr', cols[2].x, y + 5)
-        doc.text(String(r.gamesPlayed), cols[3].x, y + 5, { align: 'right' })
-        doc.text(rupiah(r.total), cols[4].x, y + 5, { align: 'right' })
-        doc.setTextColor(...(r.paid ? [5, 150, 105] : [220, 38, 38])); doc.text(r.paid ? 'Lunas' : 'Belum', cols[5].x, y + 5, { align: 'right' }); y += 7
+        if (y > 274) { doc.addPage(); y = 16; head(); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3) }
+        if (i % 2) { doc.setFillColor(245, 248, 251); doc.rect(M, y, RIGHT - M, 7, 'F') }
+        const nm = (r.is_member ? r.name + ' (M)' : r.name)
+        doc.setTextColor(...dark)
+        doc.text(String(i + 1), cx.no + 1, y + 5)
+        doc.text(nm.length > 26 ? nm.slice(0, 25) + '…' : nm, cx.nama, y + 5)
+        doc.text(String(r.gamesPlayed), cx.game, y + 5, { align: 'right' })
+        doc.text(String(r.cockCount), cx.biji, y + 5, { align: 'right' })
+        doc.text(r.courtShare > 0 ? rupiah(r.courtShare) : '–', cx.lap, y + 5, { align: 'right' })
+        doc.text(r.cockShare > 0 ? rupiah(r.cockShare) : '–', cx.cock, y + 5, { align: 'right' })
+        doc.setFont('helvetica', 'bold'); doc.text(rupiah(r.total), cx.total, y + 5, { align: 'right' }); doc.setFont('helvetica', 'normal')
+        doc.setTextColor(...(r.paid ? [5, 150, 105] : [200, 45, 45])); doc.text(r.paid ? 'Lunas' : 'Belum', cx.bayar, y + 5, { align: 'right' })
+        y += 7
       })
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(...gray); doc.text(`Dibuat ${new Date().toLocaleString('id-ID')} · MabarKas`, M, 290)
+      // garis penutup
+      doc.setDrawColor(...blue); doc.setLineWidth(0.4); doc.line(M, y, RIGHT, y)
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...gray)
+      doc.text(`Dibuat ${new Date().toLocaleString('id-ID')} - MabarKas - Dikembangkan oleh Rie`, M, 290)
+
       const fname = `Rekap ${(sesi.name || 'Sesi').replace(/[^\w\s-]/g, '').trim()} ${sesi.date}.pdf`
-      // iOS Safari sering tidak mengunduh lewat doc.save(); buka di tab baru
-      // supaya bisa di-share/simpan dari sana.
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      if (isIOS) {
-        const url = doc.output('bloburl')
-        const w = window.open(url, '_blank')
-        if (!w) doc.save(fname) // kalau pop-up diblokir, coba cara biasa
-      } else {
-        doc.save(fname)
-      }
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      if (isIOS) { const url = doc.output('bloburl'); const w = window.open(url, '_blank'); if (!w) doc.save(fname) }
+      else doc.save(fname)
     } catch (e) { dlg.alert('Gagal membuat PDF: ' + e.message) } finally { setExporting(false) }
   }
 
@@ -120,6 +154,21 @@ export default function TabRekap({ sesi }) {
         <Stat label="Game" value={`${h.jumlahGame}`} />
         <Stat label="Cock" value={`${h.totalCock}`} />
       </div>
+
+      {/* Pemasukan dipisah */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <div className="glass" style={{ flex: 1, borderRadius: 16, padding: '13px 14px' }}>
+          <p style={{ fontSize: 11, color: 'var(--t-3)', marginBottom: 3, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: 600 }}>Dari lapangan</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 17, fontWeight: 700, color: '#bdd8ff' }}>{rupiah(h.totalCourt)}</p>
+          <p style={{ fontSize: 11, color: 'var(--t-3)', marginTop: 2 }}>{h.jumlahNon} non-member</p>
+        </div>
+        <div className="glass" style={{ flex: 1, borderRadius: 16, padding: '13px 14px' }}>
+          <p style={{ fontSize: 11, color: 'var(--t-3)', marginBottom: 3, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: 600 }}>Dari cock</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 17, fontWeight: 700, color: 'var(--gold)' }}>{rupiah(h.totalBiayaCock)}</p>
+          <p style={{ fontSize: 11, color: 'var(--t-3)', marginTop: 2 }}>{h.totalCock} biji</p>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <Stat label="Total tagihan" value={rupiah(h.totalTagihan)} />
         <Stat label="Terkumpul" value={rupiah(h.totalLunas)} accent="var(--mint)" />
@@ -138,7 +187,9 @@ export default function TabRekap({ sesi }) {
             <span style={{ fontSize: 12, color: 'var(--t-3)', width: 16, flexShrink: 0 }}>{i + 1}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</p>
-              <p style={{ fontSize: 12, color: 'var(--t-3)' }}>{r.is_member ? 'Member' : 'Non-member'} · {r.gamesPlayed} game</p>
+              <p style={{ fontSize: 11.5, color: 'var(--t-3)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {r.is_member ? 'Member' : 'Non'} · {r.gamesPlayed}g · {r.cockCount} biji{r.courtShare > 0 ? ` · lap ${rupiah(r.courtShare)}` : ''} · cock {rupiah(r.cockShare)}
+              </p>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <p style={{ fontWeight: 700, color: '#fff', fontSize: 14 }}>{rupiah(r.total)}</p>

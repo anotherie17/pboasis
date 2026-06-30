@@ -1,10 +1,12 @@
-# MabarKas — Handover (Struktur v3.2)
+# MabarKas — Handover (Struktur v3.3)
 
 Salin seluruh isi ini ke sesi Claude yang baru.
 
 > **v3.2 (30 Juni 2026)** — audit + 6 sprint + 2 lapangan (Sprint 7) + **feedback uji-coba user**
 > (Sprint 8): periode member jadi daftar folder, input rupiah berformat, dialog kaca,
-> sesi bisa ditandai selesai, tombol simpan game diperbaiki. Lulus `npm run build`.
+> sesi bisa ditandai selesai, tombol simpan game diperbaiki.
+> **v3.3 (Sprint 9):** periode member bebas (nama/tanggal/aktif + tambah member),
+> layar Kelola pemain (rename/hapus), PDF rekap dirombak. Lulus `npm run build`.
 
 ---
 
@@ -49,7 +51,8 @@ komunitas **PB Oasis**. Dioperasikan 1 pengurus lewat HP.
 
 ```
 players        -> id(uuid), name(text, UNIQUE), created_at
-member_periods -> id(uuid), period_number(int), started_at(date), created_at
+member_periods -> id(uuid), period_number(int), started_at(date), ended_at(date),
+                  label(text), active(bool default true), created_at   [3 kolom BARU v3.3]
 member_list    -> period_id(uuid), player_id(uuid)            [PK gabungan]
 sessions       -> id(uuid), name(text), date(date), court_fee_nonmember(int),
                   cock_price_per_piece(int), closed(bool, default false), created_at   [closed BARU v3.2]
@@ -88,18 +91,17 @@ tagihan_pemain    = (non-member ? tarif_lapangan : 0) + porsi_cock_pemain
 
 ---
 
-## MODEL MEMBER (v3.2 — daftar folder periode)
+## MODEL MEMBER (v3.3 — periode fleksibel)
 
-- Member berlaku **per periode** (satu "batch", mis. 4x main). **Tidak** dipatok
-  ke bulan kalender — periode boleh mulai kapan saja.
-- Layar **Daftar Member** = **daftar folder periode** (urut terbaru di atas).
-  Tiap folder berlabel **"Periode N · Mulai 12 Jun 2026 · X member"**. Folder
-  paling atas ditandai **"● Aktif"**.
-- Bisa **buat periode baru** (tombol di atas, ada konfirmasi), **buka folder**
-  buat centang member, dan **hapus periode** (di dalam folder).
-- Pas **check-in**, status member otomatis dari **periode yang berlaku untuk
-  TANGGAL sesi** (periode teraktif <= tanggal sesi) — sesi lama tetap akurat.
-  Operator tetap bisa **override** per sesi (`attendees.is_member_this_session`).
+- Member berlaku **per periode** (satu "batch", mis. 4x main). Tidak dipatok bulan.
+- Layar **Daftar Member** = daftar folder periode. Tiap periode bisa diatur:
+  **nama bebas** (`label`), **tanggal mulai & selesai** (`started_at`/`ended_at`),
+  dan **toggle Aktif** (`active`). Bisa **tambah pemain baru langsung jadi member**
+  dari dalam periode.
+- Pas **check-in**, auto-member diambil dari periode yang **`active=true`** DAN
+  rentang tanggalnya mencakup tanggal sesi (`started_at <= tgl <= ended_at`, atau
+  `ended_at` kosong = terbuka). Kalau cocok lebih dari satu, ambil yang mulainya
+  paling baru. Operator tetap bisa **override** per sesi.
 
 ---
 
@@ -118,7 +120,8 @@ ketengah bingkai HP (max ~430px). Ikon SVG (`src/components/ui.jsx`), bukan emoj
 Login
   -> Beranda
        - Sesi baru
-       - Daftar member (daftar folder periode)
+       - Daftar member (periode fleksibel)
+       - Kelola pemain (rename / hapus pemain)        [BARU v3.3]
        - Riwayat sesi
        - [v3] Tombol KELUAR (logout) di pojok header
   -> (buka satu sesi) Workspace:
@@ -159,11 +162,12 @@ mabarkas\
     │   └── Dialog.jsx      (pop-up konfirmasi/alert kaca)         [BARU v3.2]
     ├── lib\
     │   ├── supabase.js
-    │   └── iuran.js         (pembulatan presisi + helper adaBelumBayar, namaBulan)
+    │   └── iuran.js         (pembulatan presisi + totalCourt, cockCount per pemain)
     └── pages\
         ├── Login.jsx
         ├── Beranda.jsx      (+ logout, status bayar akurat)
-        ├── DaftarMember.jsx (member bulanan, anti-numpuk)
+        ├── DaftarMember.jsx (periode fleksibel + tambah member)
+        ├── KelolaPemain.jsx (rename / hapus pemain)             [BARU v3.3]
         ├── SetupSesi.jsx    (+ pesan kalau sesi tanggal sama sudah ada)
         ├── SesiWorkspace.jsx(+ Edit/Hapus sesi)
         ├── TabHadir.jsx     (checkout aman, normalisasi nama)
@@ -173,6 +177,21 @@ mabarkas\
 ```
 
 > File v1 lama (CheckIn/CatatGame/Iuran/Rekap.jsx) **sudah dihapus** (dead code).
+
+---
+
+## CHANGELOG v3.3 (feedback lanjutan — Sprint 9)
+
+- **Periode member jadi fleksibel**: bisa ubah **nama periode**, set **tanggal
+  mulai & selesai**, dan **toggle Aktif**. Check-in pakai periode aktif yang
+  rentang tanggalnya cocok.
+- **Tambah pemain baru langsung dari periode** (otomatis jadi member).
+- **Layar Kelola pemain** (dari Beranda): **ubah nama** & **hapus pemain**.
+  Hapus diblokir kalau pemain sudah punya riwayat (hadir/game) biar rekap lama utuh.
+- **PDF rekap dirombak**: pemasukan **lapangan vs cock dipisah** (2 kartu),
+  ringkasan lebih jelas, **rincian per pemain detail** (game, biji cock, biaya
+  lapangan, biaya cock, total, status bayar), tanda (M) untuk member, lebih rapi.
+- `iuran.js` kini juga keluarkan `totalCourt` (pemasukan lapangan) & `cockCount`/pemain.
 
 ---
 

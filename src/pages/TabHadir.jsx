@@ -29,7 +29,7 @@ export default function TabHadir({ sesi }) {
     const [{ data: pData }, { data: aData }, { data: per }, { data: gms }] = await Promise.all([
       supabase.from('players').select('id, name').order('name'),
       supabase.from('attendees').select('player_id, is_member_this_session, paid').eq('session_id', sesi.id),
-      supabase.from('member_periods').select('id').lte('started_at', sesi.date).order('started_at', { ascending: false }).order('period_number', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('member_periods').select('id').eq('active', true).lte('started_at', sesi.date).or(`ended_at.is.null,ended_at.gte.${sesi.date}`).order('started_at', { ascending: false }).order('period_number', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('games').select('id, game_players(player_id)').eq('session_id', sesi.id),
     ])
     setPlayers(pData || [])

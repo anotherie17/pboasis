@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Beranda from './pages/Beranda'
 import SetupSesi from './pages/SetupSesi'
 import DaftarMember from './pages/DaftarMember'
+import KelolaPemain from './pages/KelolaPemain'
 import SesiWorkspace from './pages/SesiWorkspace'
 
 function Shell({ children }) {
@@ -21,7 +22,7 @@ function Shell({ children }) {
 export default function App() {
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [view, setView] = useState('beranda') // beranda | setup | member | sesi
+  const [view, setView] = useState('beranda') // beranda | setup | member | pemain | sesi
   const [sesi, setSesi] = useState(null)
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export default function App() {
           <Beranda
             onSesiBaru={() => setView('setup')}
             onMember={() => setView('member')}
+            onPemain={() => setView('pemain')}
             onBukaSesi={bukaSesi}
           />
         )}
@@ -60,6 +62,9 @@ export default function App() {
         )}
         {view === 'member' && (
           <DaftarMember onBack={() => setView('beranda')} />
+        )}
+        {view === 'pemain' && (
+          <KelolaPemain onBack={() => setView('beranda')} />
         )}
         {view === 'sesi' && sesi && (
           <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} onSesiUpdated={setSesi} />

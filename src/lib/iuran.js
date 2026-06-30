@@ -16,6 +16,7 @@ export function hitungIuran(sesi, attendees, games) {
   // Akumulasi porsi cock (mentah, masih pecahan) per pemain + jumlah game
   const cockShare = {}
   const gameCount = {}
+  const cockCount = {}   // jumlah biji cock di game yang dia ikut (info)
   let totalCock = 0
 
   for (const g of games) {
@@ -26,6 +27,7 @@ export function hitungIuran(sesi, attendees, games) {
     for (const pid of ids) {
       cockShare[pid] = (cockShare[pid] || 0) + perPlayer
       gameCount[pid] = (gameCount[pid] || 0) + 1
+      cockCount[pid] = (cockCount[pid] || 0) + (g.cock_used || 0)
     }
   }
 
@@ -55,6 +57,7 @@ export function hitungIuran(sesi, attendees, games) {
       is_member: a.is_member,
       paid: a.paid,
       gamesPlayed: gameCount[a.player_id] || 0,
+      cockCount: cockCount[a.player_id] || 0,
       cockShare: cock,
       courtShare: court,
       total: court + cock,
@@ -66,16 +69,18 @@ export function hitungIuran(sesi, attendees, games) {
   const totalLunas = rows.filter(r => r.paid).reduce((s, r) => s + r.total, 0)
   const totalBelum = totalTagihan - totalLunas
   const jumlahMember = rows.filter(r => r.is_member).length
+  const jumlahNon = rows.length - jumlahMember
+  const totalCourt = jumlahNon * courtFee   // pemasukan dari biaya lapangan
   // Orang yang masih punya tagihan > 0 tapi belum bayar (dipakai Beranda biar
   // member bertagihan Rp0 tidak bikin sesi terlihat "ada belum bayar").
   const adaBelumBayar = rows.some(r => !r.paid && r.total > 0)
 
   return {
     cockPrice, courtFee,
-    totalCock, totalBiayaCock,
+    totalCock, totalBiayaCock, totalCourt,
     rows,
     totalTagihan, totalLunas, totalBelum,
-    jumlahMember, jumlahNon: rows.length - jumlahMember,
+    jumlahMember, jumlahNon,
     jumlahGame: games.length,
     adaBelumBayar,
   }
