@@ -1,4 +1,5 @@
-// Avatar + ikon SVG (no emoji). Semua ikon pakai stroke currentColor.
+// Avatar + ikon SVG (no emoji) + Overlay (bottom sheet via portal) + CurrencyInput.
+import { createPortal } from 'react-dom'
 
 const GRADIENTS = [
   ['#9fd0ff', '#5aa0f0'],
@@ -10,8 +11,8 @@ const GRADIENTS = [
 ]
 
 export function Avatar({ name = '?', size = 40, fontSize }) {
-  const initials = name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  const [a, b] = GRADIENTS[(name.charCodeAt(0) || 0) % GRADIENTS.length]
+  const initials = (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const [a, b] = GRADIENTS[((name || '?').charCodeAt(0) || 0) % GRADIENTS.length]
   return (
     <div className="av" style={{
       width: size, height: size,
@@ -39,6 +40,9 @@ const P = {
   shuttle: 'M12 3l3 9-3 9-3-9zM9 12h6',
   logout: 'M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9',
   edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  flag: 'M4 21V4M4 4h12l-2 4 2 4H4',
+  chevron: 'M9 6l6 6-6 6',
 }
 
 export function Icon({ name, size = 22, stroke = 2, style, fill }) {
@@ -47,5 +51,45 @@ export function Icon({ name, size = 22, stroke = 2, style, fill }) {
       stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" style={style}>
       <path d={P[name] || ''} />
     </svg>
+  )
+}
+
+// Bottom sheet. Dirender lewat portal ke <body> supaya SELALU full-screen &
+// di atas segalanya (memperbaiki tombol yang ketutup bar browser di HP).
+export function Overlay({ children, onClose, noScroll }) {
+  return createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(4,12,32,0.62)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} className="fade-in"
+        style={{ width: '100%', maxWidth: 430, maxHeight: '88dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'linear-gradient(165deg,#0b2154,#0a1838)', borderTopLeftRadius: 28, borderTopRightRadius: 28, border: '1px solid var(--glass-border)', borderBottom: 'none' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.25)', margin: '10px auto 4px', flexShrink: 0 }} />
+        {children}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// Input nominal rupiah dengan format ribuan otomatis (mis. 12.000).
+// value = string angka ("12000"); onChange mengembalikan string angka tanpa titik.
+export function CurrencyInput({ value, onChange, placeholder = '0' }) {
+  const display = value ? Number(value).toLocaleString('id-ID') : ''
+  return (
+    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 0, overflow: 'hidden' }}>
+      <span style={{ padding: '14px 12px', color: 'var(--t-3)', fontSize: 14, fontWeight: 600, background: 'rgba(255,255,255,0.06)' }}>Rp</span>
+      <input type="text" inputMode="numeric" value={display}
+        onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+        placeholder={placeholder}
+        style={{ flex: 1, padding: '14px 14px 14px 2px', border: 'none', background: 'transparent', fontSize: 15, color: '#fff', fontWeight: 500 }} />
+    </div>
+  )
+}
+
+// Credit halus (dipakai di Login & Beranda).
+export function Credit({ style }) {
+  return (
+    <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t-3)', letterSpacing: 0.3, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, ...style }}>
+      <Icon name="shuttle" size={12} stroke={1.8} />
+      Dikembangkan oleh <span style={{ color: 'var(--t-2)', fontWeight: 700 }}>Rie</span>
+    </p>
   )
 }

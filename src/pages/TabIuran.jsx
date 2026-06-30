@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Avatar, Icon } from '../components/ui'
+import { useDialog } from '../components/Dialog'
 import { hitungIuran, rupiah } from '../lib/iuran'
 
 export default function TabIuran({ sesi }) {
+  const dlg = useDialog()
   const [attendees, setAttendees] = useState([])
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
@@ -28,7 +30,7 @@ export default function TabIuran({ sesi }) {
     if (error) {
       // Kembalikan tampilan kalau gagal simpan ke server (mis. sinyal jelek).
       setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, paid } : a))
-      alert('Gagal menyimpan status bayar. Cek sinyal lalu coba lagi.')
+      dlg.alert('Gagal menyimpan status bayar. Cek sinyal lalu coba lagi.')
     }
   }
 

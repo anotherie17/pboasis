@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Icon } from '../components/ui'
+import { Icon, CurrencyInput } from '../components/ui'
+import { useDialog } from '../components/Dialog'
 import { rupiah } from '../lib/iuran'
 
 function Label({ children, hint }) {
@@ -12,17 +13,8 @@ function Label({ children, hint }) {
   )
 }
 
-function RupiahInput({ value, onChange }) {
-  return (
-    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 0, overflow: 'hidden' }}>
-      <span style={{ padding: '14px 12px', color: 'var(--t-3)', fontSize: 14, fontWeight: 600, background: 'rgba(255,255,255,0.06)' }}>Rp</span>
-      <input type="number" min="0" inputMode="numeric" value={value} onChange={e => onChange(e.target.value)}
-        placeholder="0" style={{ flex: 1, padding: '14px 14px 14px 2px', border: 'none', background: 'transparent', fontSize: 15, color: '#fff', fontWeight: 500 }} />
-    </div>
-  )
-}
-
 export default function SetupSesi({ onSesiDibuat, onBack }) {
+  const dlg = useDialog()
   const todayIso = new Date().toISOString().split('T')[0]
   const [name, setName] = useState('')
   const [date, setDate] = useState(todayIso)
@@ -39,7 +31,7 @@ export default function SetupSesi({ onSesiDibuat, onBack }) {
     const { data: existing } = await supabase.from('sessions').select('*').eq('date', date).maybeSingle()
     if (existing) {
       setLoading(false)
-      alert(`Sudah ada sesi "${existing.name || 'Sesi'}" di tanggal ini. Sesi itu yang dibuka ya (harga/nama yang barusan diketik tidak dipakai). Mau sesi terpisah? Ganti tanggalnya.`)
+      await dlg.alert(`Sudah ada sesi "${existing.name || 'Sesi'}" di tanggal ini. Sesi itu yang dibuka ya (harga/nama yang barusan diketik tidak dipakai). Mau sesi terpisah? Ganti tanggalnya.`, { title: 'Sesi sudah ada' })
       onSesiDibuat(existing); return
     }
 
@@ -76,11 +68,11 @@ export default function SetupSesi({ onSesiDibuat, onBack }) {
           </div>
           <div style={{ marginBottom: 18 }}>
             <Label hint="Sesuai merek yang dipakai">Harga cock per biji</Label>
-            <RupiahInput value={cockPrice} onChange={setCockPrice} />
+            <CurrencyInput value={cockPrice} onChange={setCockPrice} />
           </div>
           <div>
             <Label hint="Flat per orang, dari panitia">Tarif lapangan non-member</Label>
-            <RupiahInput value={courtFee} onChange={setCourtFee} />
+            <CurrencyInput value={courtFee} onChange={setCourtFee} />
           </div>
 
           {error && <p style={{ color: 'var(--rose)', fontSize: 13, marginTop: 14, fontWeight: 500 }}>{error}</p>}

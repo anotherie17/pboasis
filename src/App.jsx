@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { Icon } from './components/ui'
+import { DialogProvider } from './components/Dialog'
 import Login from './pages/Login'
 import Beranda from './pages/Beranda'
 import SetupSesi from './pages/SetupSesi'
@@ -40,28 +41,30 @@ export default function App() {
     </Shell>
   )
 
-  if (!session) return <Shell><Login onLogin={setSession} /></Shell>
+  if (!session) return <DialogProvider><Shell><Login onLogin={setSession} /></Shell></DialogProvider>
 
   function bukaSesi(s) { setSesi(s); setView('sesi') }
 
   return (
-    <Shell>
-      {view === 'beranda' && (
-        <Beranda
-          onSesiBaru={() => setView('setup')}
-          onMember={() => setView('member')}
-          onBukaSesi={bukaSesi}
-        />
-      )}
-      {view === 'setup' && (
-        <SetupSesi onBack={() => setView('beranda')} onSesiDibuat={bukaSesi} />
-      )}
-      {view === 'member' && (
-        <DaftarMember onBack={() => setView('beranda')} />
-      )}
-      {view === 'sesi' && sesi && (
-        <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} onSesiUpdated={setSesi} />
-      )}
-    </Shell>
+    <DialogProvider>
+      <Shell>
+        {view === 'beranda' && (
+          <Beranda
+            onSesiBaru={() => setView('setup')}
+            onMember={() => setView('member')}
+            onBukaSesi={bukaSesi}
+          />
+        )}
+        {view === 'setup' && (
+          <SetupSesi onBack={() => setView('beranda')} onSesiDibuat={bukaSesi} />
+        )}
+        {view === 'member' && (
+          <DaftarMember onBack={() => setView('beranda')} />
+        )}
+        {view === 'sesi' && sesi && (
+          <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} onSesiUpdated={setSesi} />
+        )}
+      </Shell>
+    </DialogProvider>
   )
 }

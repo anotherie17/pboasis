@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/ui'
+import { useDialog } from '../components/Dialog'
 import { hitungIuran, rupiah } from '../lib/iuran'
 
 function formatTanggal(iso) {
@@ -18,6 +19,7 @@ function Stat({ label, value, accent }) {
 }
 
 export default function TabRekap({ sesi }) {
+  const dlg = useDialog()
   const [attendees, setAttendees] = useState([])
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,7 +40,7 @@ export default function TabRekap({ sesi }) {
 
   function exportPDF() {
     const lib = window.jspdf
-    if (!lib || !lib.jsPDF) { alert('Modul PDF belum termuat. Refresh halaman lalu ulangi.'); return }
+    if (!lib || !lib.jsPDF) { dlg.alert('Modul PDF belum termuat. Refresh halaman lalu ulangi.'); return }
     setExporting(true)
     try {
       const h = hitungIuran(sesi, attendees, games)
@@ -100,7 +102,7 @@ export default function TabRekap({ sesi }) {
       } else {
         doc.save(fname)
       }
-    } catch (e) { alert('Gagal membuat PDF: ' + e.message) } finally { setExporting(false) }
+    } catch (e) { dlg.alert('Gagal membuat PDF: ' + e.message) } finally { setExporting(false) }
   }
 
   if (loading) return <p className="muted" style={{ padding: 30, textAlign: 'center' }}>Memuat...</p>

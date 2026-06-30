@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Avatar, Icon } from '../components/ui'
+import { useDialog } from '../components/Dialog'
 
 // Rapikan nama: buang spasi depan/belakang + spasi ganda jadi satu.
 const rapikan = s => s.trim().replace(/\s+/g, ' ')
 
 export default function TabHadir({ sesi }) {
+  const dlg = useDialog()
   const [players, setPlayers] = useState([])
   const [attendees, setAttendees] = useState([])
   const [memberSet, setMemberSet] = useState(new Set())
@@ -49,19 +51,19 @@ export default function TabHadir({ sesi }) {
     const { data, error } = await supabase.from('attendees')
       .insert({ session_id: sesi.id, player_id: player.id, is_member_this_session: isMember })
       .select().single()
-    if (error || !data) { alert('Gagal mencatat kehadiran. Cek sinyal lalu coba lagi.'); return }
+    if (error || !data) { dlg.alert('Gagal mencatat kehadiran. Cek sinyal lalu coba lagi.'); return }
     setAttendees(prev => [...prev, data])
   }
 
   async function checkOut(playerId) {
     const n = gameCount[playerId] || 0
     if (n > 0) {
-      alert(`Pemain ini sudah main ${n} game. Hapus dulu game-game itu di tab Game sebelum mengeluarkannya, supaya tagihan & catatan tidak kacau.`)
+      dlg.alert(`Pemain ini sudah main ${n} game. Hapus dulu game-game itu di tab Game sebelum mengeluarkannya, supaya tagihan & catatan tidak kacau.`, { title: 'Tidak bisa dikeluarkan' })
       return
     }
-    if (!confirm('Keluarkan pemain ini dari daftar hadir?')) return
+    if (!(await dlg.confirm('Keluarkan pemain ini dari daftar hadir?', { title: 'Keluarkan pemain', okText: 'Keluarkan' }))) return
     const { error } = await supabase.from('attendees').delete().eq('session_id', sesi.id).eq('player_id', playerId)
-    if (error) { alert('Gagal mengeluarkan. Coba lagi.'); return }
+    if (error) { dlg.alert('Gagal mengeluarkan. Coba lagi.'); return }
     setAttendees(prev => prev.filter(a => a.player_id !== playerId))
   }
 
@@ -71,7 +73,7 @@ export default function TabHadir({ sesi }) {
     const { error } = await supabase.from('attendees').update({ is_member_this_session: v }).eq('session_id', sesi.id).eq('player_id', playerId)
     if (error) {
       setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, is_member_this_session: cur } : a))
-      alert('Gagal menyimpan. Coba lagi.')
+      dlg.alert('Gagal menyimpan. Coba lagi.')
     }
   }
 
@@ -81,7 +83,7 @@ export default function TabHadir({ sesi }) {
     // Cek duplikat tanpa peduli huruf besar/kecil & spasi.
     const dup = players.find(p => rapikan(p.name).toLowerCase() === nama.toLowerCase())
     if (dup) {
-      alert(`Nama "${dup.name}" sudah ada di daftar. Pakai yang itu aja ya.`)
+      dlg.alert(`Nama "${dup.name}" sudah ada di daftar. Pakai yang itu aja ya.`, { title: 'Nama sudah ada' })
       setNewName(''); setShowAdd(false)
       return
     }
@@ -91,7 +93,7 @@ export default function TabHadir({ sesi }) {
       setPlayers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setNewName(''); setShowAdd(false)
       await checkIn(data)
-    } else alert('Gagal menambah pemain. Mungkin namanya sudah ada.')
+    } else dlg.alert('Gagal menambah pemain. Mungkin namanya sudah ada.')
     setSaving(false)
   }
 

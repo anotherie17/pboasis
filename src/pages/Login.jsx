@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Icon } from '../components/ui'
+import { Icon, Credit } from '../components/ui'
 
 export default function Login({ onLogin }) {
   const [password, setPassword] = useState('')
@@ -42,6 +42,8 @@ export default function Login({ onLogin }) {
           </button>
         </form>
       </div>
+
+      <Credit style={{ marginTop: 26 }} />
     </div>
   )
 }

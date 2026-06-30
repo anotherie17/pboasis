@@ -1,10 +1,10 @@
-# MabarKas — Handover (Struktur v3)
+# MabarKas — Handover (Struktur v3.2)
 
 Salin seluruh isi ini ke sesi Claude yang baru.
 
-> **v3 (30 Juni 2026)** — hasil audit menyeluruh + perbaikan bertahap (6 sprint).
-> Bagian **CHANGELOG v3** di bawah merangkum semua yang berubah. Aplikasi sudah
-> **lulus `npm run build`** tanpa error.
+> **v3.2 (30 Juni 2026)** — audit + 6 sprint + 2 lapangan (Sprint 7) + **feedback uji-coba user**
+> (Sprint 8): periode member jadi daftar folder, input rupiah berformat, dialog kaca,
+> sesi bisa ditandai selesai, tombol simpan game diperbaiki. Lulus `npm run build`.
 
 ---
 
@@ -52,10 +52,11 @@ players        -> id(uuid), name(text, UNIQUE), created_at
 member_periods -> id(uuid), period_number(int), started_at(date), created_at
 member_list    -> period_id(uuid), player_id(uuid)            [PK gabungan]
 sessions       -> id(uuid), name(text), date(date), court_fee_nonmember(int),
-                  cock_price_per_piece(int), created_at
+                  cock_price_per_piece(int), closed(bool, default false), created_at   [closed BARU v3.2]
 attendees      -> session_id, player_id [PK gabungan],
                   is_member_this_session(bool), paid(bool), checked_in_at
-games          -> id(uuid), session_id, cock_used(int, CHECK >= 0), played_at
+games          -> id(uuid), session_id, cock_used(int, CHECK >= 0),
+                  finished(bool, default true), played_at        [finished BARU v3.1]
 game_players   -> game_id, player_id [PK gabungan]
 ```
 
@@ -87,15 +88,17 @@ tagihan_pemain    = (non-member ? tarif_lapangan : 0) + porsi_cock_pemain
 
 ---
 
-## MODEL MEMBER (v3 — diperjelas)
+## MODEL MEMBER (v3.2 — daftar folder periode)
 
-- Member berlaku **per bulan**. Tiap bulan dibuat **satu daftar** member.
-- Layar **Daftar Member** menampilkan **nama bulan** (mis. "Member Juni 2026"),
-  bukan lagi "Periode N".
-- Tombol **"Bulan ini"** hanya muncul kalau daftar bulan berjalan belum ada;
-  ada **konfirmasi** sebelum membuat daftar baru → **tidak bisa numpuk** lagi.
-- Pas **check-in**, status member otomatis dari **daftar yang berlaku untuk
-  TANGGAL sesi** (bukan sekadar yang terbaru) — jadi sesi lama tetap akurat.
+- Member berlaku **per periode** (satu "batch", mis. 4x main). **Tidak** dipatok
+  ke bulan kalender — periode boleh mulai kapan saja.
+- Layar **Daftar Member** = **daftar folder periode** (urut terbaru di atas).
+  Tiap folder berlabel **"Periode N · Mulai 12 Jun 2026 · X member"**. Folder
+  paling atas ditandai **"● Aktif"**.
+- Bisa **buat periode baru** (tombol di atas, ada konfirmasi), **buka folder**
+  buat centang member, dan **hapus periode** (di dalam folder).
+- Pas **check-in**, status member otomatis dari **periode yang berlaku untuk
+  TANGGAL sesi** (periode teraktif <= tanggal sesi) — sesi lama tetap akurat.
   Operator tetap bisa **override** per sesi (`attendees.is_member_this_session`).
 
 ---
@@ -115,19 +118,23 @@ ketengah bingkai HP (max ~430px). Ikon SVG (`src/components/ui.jsx`), bukan emoj
 Login
   -> Beranda
        - Sesi baru
-       - Daftar member (atur bulanan)
+       - Daftar member (daftar folder periode)
        - Riwayat sesi
        - [v3] Tombol KELUAR (logout) di pojok header
   -> (buka satu sesi) Workspace:
-       - [v3] Tombol EDIT sesi di header (ubah nama/tanggal/harga, atau HAPUS sesi)
+       - Tombol EDIT sesi di header: ubah nama/tanggal/harga, **Tandai sesi selesai**
+         (v3.2 → Beranda jadi "Selesai"), atau HAPUS sesi
        - 4 TAB bawah: [ Hadir ] [ Game ] [ Iuran ] [ Rekap ]
 ```
 
 - **Hadir** — catat orang dateng (member auto by tanggal sesi, bisa override). Min 4 buat main.
   [v3] Checkout pakai ikon "×" + konfirmasi; **diblokir kalau pemain sudah punya game**.
-- **Game** — list match. Catat game: pilih 4 (saran giliran) + cock.
-  [v3] Tombol **Simpan nempel di bawah sheet** (selalu kelihatan) + **anti dobel-tap**.
-  Ganti pemain game = hapus lalu catat ulang.
+- **Game** — list match. **Alur 2 lapangan (v3.1):** pilih 4 → **"Mulai main"**
+  (game jadi "● Lagi main"), pas kelar tap game itu → isi cock → **"Selesai"**.
+  **Saran giliran otomatis mengecualikan yang lagi main**, jadi 2 lapangan bisa
+  jalan barengan tanpa bentrok. Ada juga "langsung catat selesai" buat game yang
+  dicatat belakangan. Tombol simpan nempel di bawah sheet + anti dobel-tap.
+  Ganti pemain = hapus lalu mulai ulang.
 - **Iuran** — tagihan tiap orang, tandai Lunas/Belum.
 - **Rekap** — ringkasan + export PDF ([v3] tahan-banting di iOS).
 
@@ -147,7 +154,9 @@ mabarkas\
     ├── main.jsx            (+ daftar service worker)
     ├── App.jsx             (auth + routing; passes onSesiUpdated)
     ├── index.css           (kontras & blur disesuaikan)
-    ├── components\ui.jsx   (+ ikon logout, edit)
+    ├── components\
+    │   ├── ui.jsx          (+ Overlay portal, CurrencyInput, ikon)
+    │   └── Dialog.jsx      (pop-up konfirmasi/alert kaca)         [BARU v3.2]
     ├── lib\
     │   ├── supabase.js
     │   └── iuran.js         (pembulatan presisi + helper adaBelumBayar, namaBulan)
@@ -164,6 +173,35 @@ mabarkas\
 ```
 
 > File v1 lama (CheckIn/CatatGame/Iuran/Rekap.jsx) **sudah dihapus** (dead code).
+
+---
+
+## CHANGELOG v3.2 (feedback uji-coba user — Sprint 8)
+
+- **Daftar member jadi daftar folder periode** (buat/buka/hapus), label pakai
+  tanggal mulai + "Periode N", folder teratas "Aktif". Nama-bulan dibuang
+  (rancu karena periode tak selalu mulai awal bulan).
+- **Input harga berformat ribuan** otomatis (12.000) di Setup & Edit sesi.
+- **Tombol simpan game diperbaiki**: sheet dipindah ke *portal* + tinggi `dvh`,
+  area daftar bisa menyusut → tombol simpan SELALU kelihatan (tidak lagi ketutup
+  bar browser di HP).
+- **Sesi bisa ditandai "Selesai"** (kolom `sessions.closed`) lewat Edit sesi →
+  Beranda tampil "Selesai" walau tanggalnya hari ini. Bisa diaktifkan lagi.
+- **Semua `confirm()`/`alert()` bawaan browser diganti pop-up kaca** senada app.
+- **Credit halus** "Dikembangkan oleh Rie" di bawah kotak Login & paling bawah Beranda
+  (komponen `Credit` di `components/ui.jsx`).
+
+---
+
+## CHANGELOG v3.1 (dukungan 2 lapangan — Sprint 7)
+
+- Kolom baru `games.finished` (game lama otomatis `true`/selesai).
+- Alur game jadi **Mulai main → Selesai**: game "lagi main" ditandai hijau,
+  cock diisi pas selesai. Opsi "langsung catat selesai" tetap ada.
+- **Saran giliran & daftar pilih pemain mengecualikan yang lagi main** → 2 lapangan
+  (atau lebih) bisa jalan bersamaan tanpa menyodorkan orang yang lagi di lapangan.
+- Statistik & badge "lagi main" muncul di daftar pemain dan match list.
+- Uang/iuran TIDAK berubah — tiap game tetap cock ÷ 4 pemainnya.
 
 ---
 
@@ -245,9 +283,11 @@ diberi pesan & dikembalikan. Antrian offline penuh = pekerjaan besar, pertimbang
 
 ## CATATAN MODEL (yang belum diubah, by design)
 
-- **Saran giliran** mengasumsikan **1 lapangan** bergantian (gabungan paling sedikit
-  main + paling lama nunggu). Kalau PB Oasis pakai >1 lapangan barengan, model ini
-  perlu dirombak (belum dikonfirmasi user — tanyakan dulu sebelum mengubah).
+- **Saran giliran** sudah **mendukung 2 lapangan barengan** (v3.1): pakai metrik
+  paling sedikit main + paling lama nunggu, DAN mengecualikan pemain yang status
+  game-nya masih "lagi main". User konfirmasi: kadang 2 lapangan jalan bersamaan
+  saat ramai (mis. Sabtu: Lap 1 jam 20–23, Lap 2 jam 21–23). Uang & data tidak
+  terpengaruh jumlah lapangan — tiap game tetap berdiri sendiri (cock ÷ 4).
 - "Berlangsung vs Selesai" di Beranda ditentukan dari `date == hari ini`.
 
 *Handover v3 — 30 Juni 2026, sesudah audit + 6 sprint perbaikan.*

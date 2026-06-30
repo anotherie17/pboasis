@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Icon } from '../components/ui'
+import { Icon, Credit } from '../components/ui'
+import { useDialog } from '../components/Dialog'
 import { hitungIuran } from '../lib/iuran'
 
 function formatTanggal(iso) {
@@ -15,6 +16,7 @@ function isToday(iso) {
 }
 
 export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
+  const dlg = useDialog()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -24,7 +26,7 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
     setLoading(true)
     const { data } = await supabase
       .from('sessions')
-      .select('id, name, date, court_fee_nonmember, cock_price_per_piece, attendees(player_id, is_member_this_session, paid), games(cock_used, game_players(player_id))')
+      .select('id, name, date, closed, court_fee_nonmember, cock_price_per_piece, attendees(player_id, is_member_this_session, paid), games(cock_used, game_players(player_id))')
       .order('date', { ascending: false })
       .limit(30)
     setSessions(data || [])
@@ -32,20 +34,14 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
   }
 
   async function handleLogout() {
-    if (!confirm('Keluar dari akun pengurus?')) return
+    const ok = await dlg.confirm('Keluar dari akun pengurus?', { title: 'Keluar', okText: 'Keluar' })
+    if (!ok) return
     await supabase.auth.signOut()
-    // App akan otomatis balik ke layar Login lewat onAuthStateChange.
   }
 
-  // Hitung iuran ringkas tiap sesi supaya status bayar akurat
-  // (member yang tagihannya Rp0 tidak dianggap "belum bayar").
   function ringkas(s) {
-    const attendees = (s.attendees || []).map(a => ({
-      player_id: a.player_id, name: '', is_member: a.is_member_this_session, paid: a.paid,
-    }))
-    const games = (s.games || []).map(g => ({
-      cock_used: g.cock_used, playerIds: (g.game_players || []).map(p => p.player_id),
-    }))
+    const attendees = (s.attendees || []).map(a => ({ player_id: a.player_id, name: '', is_member: a.is_member_this_session, paid: a.paid }))
+    const games = (s.games || []).map(g => ({ cock_used: g.cock_used, playerIds: (g.game_players || []).map(p => p.player_id) }))
     const h = hitungIuran(s, attendees, games)
     return { hadir: attendees.length, totalG: games.length, adaBelum: h.adaBelumBayar }
   }
@@ -81,7 +77,7 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
         </span>
         <span>
           <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#fff' }}>Daftar member</span>
-          <span style={{ display: 'block', fontSize: 12, color: 'var(--t-3)', marginTop: 1 }}>Atur member bulan ini</span>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--t-3)', marginTop: 1 }}>Atur member per periode</span>
         </span>
       </button>
 
@@ -96,12 +92,12 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
       ) : (
         sessions.map(s => {
           const { hadir, totalG, adaBelum } = ringkas(s)
-          const today = isToday(s.date)
+          const berlangsung = isToday(s.date) && !s.closed
           return (
             <button key={s.id} onClick={() => onBukaSesi(s)} className="glass"
               style={{ width: '100%', borderRadius: 24, padding: '18px 19px', marginBottom: 14, position: 'relative', textAlign: 'left', display: 'block' }}>
-              <span className={`tag ${today ? 'tag-live' : 'tag-done'}`} style={{ position: 'absolute', top: 18, right: 18 }}>
-                {today ? '● Berlangsung' : 'Selesai'}
+              <span className={`tag ${berlangsung ? 'tag-live' : 'tag-done'}`} style={{ position: 'absolute', top: 18, right: 18 }}>
+                {berlangsung ? '● Berlangsung' : 'Selesai'}
               </span>
               <span style={{ display: 'block', fontSize: 12, color: 'var(--t-3)', fontWeight: 500 }}>{formatTanggal(s.date)}</span>
               <span className="h2" style={{ display: 'block', color: '#fff', marginTop: 3 }}>{s.name || 'Sesi'}</span>
@@ -116,6 +112,8 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
           )
         })
       )}
+
+      <Credit style={{ marginTop: 24, paddingBottom: 4 }} />
     </div>
   )
 }
