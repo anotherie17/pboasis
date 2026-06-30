@@ -1,317 +1,103 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { Icon } from '../components/ui'
+import { rupiah } from '../lib/iuran'
 
-function InputField({ label, hint, value, onChange, prefix = 'Rp' }) {
-  const [focused, setFocused] = useState(false)
+function Label({ children, hint }) {
   return (
-    <div style={{ marginBottom: '20px' }}>
-      <label style={{
-        display: 'block',
-        fontSize: '12px',
-        fontWeight: '600',
-        color: 'var(--gray-600)',
-        marginBottom: '6px',
-        letterSpacing: '0.4px',
-        textTransform: 'uppercase',
-      }}>{label}</label>
-      {hint && (
-        <p style={{ fontSize: '12px', color: 'var(--gray-400)', marginBottom: '8px' }}>{hint}</p>
-      )}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--gray-200)',
-        borderRadius: 'var(--radius-sm)',
-        background: 'var(--gray-50)',
-        overflow: 'hidden',
-        transition: 'border-color var(--transition)',
-      }}>
-        <span style={{
-          padding: '12px 12px 12px 14px',
-          color: 'var(--gray-400)',
-          fontSize: '14px',
-          fontWeight: '500',
-          borderRight: '1px solid var(--gray-200)',
-          background: 'var(--gray-100)',
-        }}>{prefix}</span>
-        <input
-          type="number"
-          min="0"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          style={{
-            flex: 1,
-            padding: '12px 14px',
-            border: 'none',
-            background: 'transparent',
-            fontSize: '15px',
-            color: 'var(--gray-800)',
-            fontWeight: '500',
-          }}
-          placeholder="0"
-        />
-      </div>
+    <>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--t-2)', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>{children}</label>
+      {hint && <p style={{ fontSize: 12, color: 'var(--t-3)', marginBottom: 8 }}>{hint}</p>}
+    </>
+  )
+}
+
+function RupiahInput({ value, onChange }) {
+  return (
+    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 0, overflow: 'hidden' }}>
+      <span style={{ padding: '14px 12px', color: 'var(--t-3)', fontSize: 14, fontWeight: 600, background: 'rgba(255,255,255,0.06)' }}>Rp</span>
+      <input type="number" min="0" inputMode="numeric" value={value} onChange={e => onChange(e.target.value)}
+        placeholder="0" style={{ flex: 1, padding: '14px 14px 14px 2px', border: 'none', background: 'transparent', fontSize: 15, color: '#fff', fontWeight: 500 }} />
     </div>
   )
 }
 
-function TextField({ label, hint, value, onChange, placeholder }) {
-  const [focused, setFocused] = useState(false)
-  return (
-    <div style={{ marginBottom: '20px' }}>
-      <label style={{
-        display: 'block',
-        fontSize: '12px',
-        fontWeight: '600',
-        color: 'var(--gray-600)',
-        marginBottom: '6px',
-        letterSpacing: '0.4px',
-        textTransform: 'uppercase',
-      }}>{label}</label>
-      {hint && (
-        <p style={{ fontSize: '12px', color: 'var(--gray-400)', marginBottom: '8px' }}>{hint}</p>
-      )}
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder={placeholder}
-        style={{
-          width: '100%',
-          padding: '12px 14px',
-          border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--gray-200)',
-          borderRadius: 'var(--radius-sm)',
-          background: 'var(--gray-50)',
-          fontSize: '15px',
-          color: 'var(--gray-800)',
-          fontWeight: '500',
-          transition: 'border-color var(--transition)',
-        }}
-      />
-    </div>
-  )
-}
-
-function DateField({ label, value, onChange }) {
-  const [focused, setFocused] = useState(false)
-  return (
-    <div style={{ marginBottom: '20px' }}>
-      <label style={{
-        display: 'block',
-        fontSize: '12px',
-        fontWeight: '600',
-        color: 'var(--gray-600)',
-        marginBottom: '6px',
-        letterSpacing: '0.4px',
-        textTransform: 'uppercase',
-      }}>{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={{
-          width: '100%',
-          padding: '12px 14px',
-          border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--gray-200)',
-          borderRadius: 'var(--radius-sm)',
-          background: 'var(--gray-50)',
-          fontSize: '15px',
-          color: 'var(--gray-800)',
-          fontWeight: '500',
-          transition: 'border-color var(--transition)',
-        }}
-      />
-    </div>
-  )
-}
-
-export default function SetupSesi({ onSesiDibuat }) {
+export default function SetupSesi({ onSesiDibuat, onBack }) {
   const todayIso = new Date().toISOString().split('T')[0]
-
-  const [sessionName, setSessionName] = useState('')
-  const [sessionDate, setSessionDate] = useState(todayIso)
+  const [name, setName] = useState('')
+  const [date, setDate] = useState(todayIso)
   const [cockPrice, setCockPrice] = useState('')
   const [courtFee, setCourtFee] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const formattedDate = sessionDate
-    ? new Date(sessionDate + 'T00:00:00').toLocaleDateString('id-ID', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-      })
-    : ''
-
   async function handleMulai(e) {
     e.preventDefault()
-    if (!sessionName.trim() || !cockPrice || !courtFee) {
-      setError('Isi semua field dulu ya.')
-      return
-    }
-    setLoading(true)
-    setError('')
+    if (!name.trim() || !cockPrice || !courtFee) { setError('Isi semua field dulu ya.'); return }
+    setLoading(true); setError('')
 
-    // Cek apakah sesi di tanggal ini sudah ada
-    const { data: existing } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('date', sessionDate)
-      .maybeSingle()
+    const { data: existing } = await supabase.from('sessions').select('*').eq('date', date).maybeSingle()
+    if (existing) { onSesiDibuat(existing); return }
 
-    if (existing) {
-      onSesiDibuat(existing)
-      return
-    }
+    const { data, error: err } = await supabase.from('sessions').insert({
+      name: name.trim(), date,
+      cock_price_per_piece: parseInt(cockPrice),
+      court_fee_nonmember: parseInt(courtFee),
+    }).select().single()
 
-    const { data, error: err } = await supabase
-      .from('sessions')
-      .insert({
-        name: sessionName.trim(),
-        date: sessionDate,
-        cock_price_per_piece: parseInt(cockPrice),
-        court_fee_nonmember: parseInt(courtFee),
-      })
-      .select()
-      .single()
-
-    if (err) {
-      setError('Gagal membuat sesi. Coba lagi.')
-      setLoading(false)
-    } else {
-      onSesiDibuat(data)
-    }
+    if (err) { setError('Gagal membuat sesi. Coba lagi.'); setLoading(false) }
+    else onSesiDibuat(data)
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'var(--gray-50)',
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <p style={{
-          fontSize: '12px',
-          fontWeight: '600',
-          color: 'var(--blue)',
-          letterSpacing: '0.5px',
-          textTransform: 'uppercase',
-          marginBottom: '4px',
-        }}>Sesi Baru</p>
-        <h1 style={{
-          fontSize: '22px',
-          fontWeight: '600',
-          color: 'var(--navy)',
-          letterSpacing: '-0.3px',
-        }}>Setup Sesi</h1>
-        <p style={{
-          fontSize: '13px',
-          color: 'var(--gray-400)',
-          marginTop: '4px',
-        }}>{formattedDate}</p>
+    <div className="scroll fade-in" style={{ padding: '14px 18px 28px' }}>
+      <button className="btn-ghost" onClick={onBack} style={{ width: 'auto', padding: '8px 14px 8px 10px', marginBottom: 16 }}>
+        <Icon name="back" size={18} /> Beranda
+      </button>
+
+      <div style={{ padding: '0 6px 22px' }}>
+        <p className="eyebrow">Sesi baru</p>
+        <h1 className="h1" style={{ marginTop: 4 }}>Setup sesi</h1>
       </div>
 
-      {/* Card */}
-      <div style={{
-        background: 'var(--white)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '24px',
-        boxShadow: 'var(--shadow-sm)',
-        maxWidth: '480px',
-        width: '100%',
-      }}>
-        <form onSubmit={handleMulai}>
-          <TextField
-            label="Nama sesi"
-            hint="Mis. Mabar Rabu, Mabar Pagi"
-            value={sessionName}
-            onChange={setSessionName}
-            placeholder="Mabar Rabu"
-          />
-          <DateField
-            label="Tanggal main (match day)"
-            value={sessionDate}
-            onChange={setSessionDate}
-          />
-          <InputField
-            label="Harga cock per biji"
-            hint="Sesuai merek yang dipakai hari ini"
-            value={cockPrice}
-            onChange={setCockPrice}
-          />
-          <InputField
-            label="Tarif lapangan non-member"
-            hint="Flat per orang per sesi"
-            value={courtFee}
-            onChange={setCourtFee}
-          />
+      <form onSubmit={handleMulai}>
+        <div className="glass" style={{ borderRadius: 24, padding: 22 }}>
+          <div style={{ marginBottom: 18 }}>
+            <Label hint="Mis. Mabar Rabu, Mabar Pagi">Nama sesi</Label>
+            <input className="field" value={name} onChange={e => setName(e.target.value)} placeholder="Mabar Rabu" />
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <Label>Tanggal main (match day)</Label>
+            <input type="date" className="field" value={date} onChange={e => setDate(e.target.value)} style={{ colorScheme: 'dark' }} />
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <Label hint="Sesuai merek yang dipakai">Harga cock per biji</Label>
+            <RupiahInput value={cockPrice} onChange={setCockPrice} />
+          </div>
+          <div>
+            <Label hint="Flat per orang, dari panitia">Tarif lapangan non-member</Label>
+            <RupiahInput value={courtFee} onChange={setCourtFee} />
+          </div>
 
-          {error && (
-            <p style={{
-              color: 'var(--danger)',
-              fontSize: '13px',
-              marginBottom: '16px',
-              fontWeight: '500',
-            }}>{error}</p>
-          )}
+          {error && <p style={{ color: 'var(--rose)', fontSize: 13, marginTop: 14, fontWeight: 500 }}>{error}</p>}
 
-          {/* Preview perhitungan */}
-          {sessionName.trim() && cockPrice && courtFee && (
-            <div style={{
-              background: 'var(--blue-light)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '14px',
-              marginBottom: '20px',
-            }}>
-              <p style={{ fontSize: '12px', color: 'var(--blue)', fontWeight: '600', marginBottom: '8px' }}>
-                RINGKASAN
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>Sesi</span>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)' }}>
-                  {sessionName.trim()}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>Cock per biji</span>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)' }}>
-                  Rp {parseInt(cockPrice || 0).toLocaleString('id-ID')}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>Tarif non-member</span>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)' }}>
-                  Rp {parseInt(courtFee || 0).toLocaleString('id-ID')}
-                </span>
-              </div>
+          {name.trim() && cockPrice && courtFee && (
+            <div style={{ marginTop: 18, padding: 14, borderRadius: 16, background: 'rgba(90,160,255,0.14)', border: '1px solid rgba(120,170,255,0.25)' }}>
+              <p style={{ fontSize: 11, color: '#bdd8ff', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Ringkasan</p>
+              {[['Sesi', name.trim()], ['Cock/biji', rupiah(cockPrice)], ['Tarif non-member', rupiah(courtFee)]].map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span style={{ fontSize: 13, color: 'var(--t-2)' }}>{k}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{v}</span>
+                </div>
+              ))}
             </div>
           )}
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading || !sessionName.trim() || !cockPrice || !courtFee}
-            style={{
-              width: '100%',
-              padding: '14px',
-              background: loading || !sessionName.trim() || !cockPrice || !courtFee ? 'var(--gray-200)' : 'var(--navy)',
-              color: loading || !sessionName.trim() || !cockPrice || !courtFee ? 'var(--gray-400)' : 'var(--white)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '15px',
-              fontWeight: '600',
-              letterSpacing: '-0.1px',
-            }}
-          >
-            {loading ? 'Menyimpan...' : 'Mulai Sesi →'}
-          </button>
-        </form>
-      </div>
+        <button type="submit" className="cta" disabled={loading || !name.trim() || !cockPrice || !courtFee} style={{ marginTop: 16 }}>
+          {loading ? 'Menyimpan...' : 'Mulai sesi'} <Icon name="back" size={18} style={{ transform: 'rotate(180deg)' }} />
+        </button>
+      </form>
     </div>
   )
 }

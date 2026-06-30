@@ -1,66 +1,67 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { Icon } from './components/ui'
 import Login from './pages/Login'
+import Beranda from './pages/Beranda'
 import SetupSesi from './pages/SetupSesi'
-import CheckIn from './pages/CheckIn'
-import CatatGame from './pages/CatatGame'
-import Iuran from './pages/Iuran'
-import Rekap from './pages/Rekap'
+import DaftarMember from './pages/DaftarMember'
+import SesiWorkspace from './pages/SesiWorkspace'
+
+function Shell({ children }) {
+  return (
+    <div className="app-shell">
+      <div className="blob blob-1" />
+      <div className="blob blob-2" />
+      {children}
+    </div>
+  )
+}
 
 export default function App() {
   const [session, setSession] = useState(null)
-  const [sesi, setSesi] = useState(null)
-  const [page, setPage] = useState('checkin') // checkin | game | iuran | rekap
   const [authLoading, setAuthLoading] = useState(true)
+  const [view, setView] = useState('beranda') // beranda | setup | member | sesi
+  const [sesi, setSesi] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setAuthLoading(false)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-    return () => listener.subscription.unsubscribe()
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false) })
+    const { data: l } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => l.subscription.unsubscribe()
   }, [])
 
   if (authLoading) return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: 'var(--navy)',
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏸</div>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>Memuat...</p>
+    <Shell>
+      <div className="scroll" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#cfe4ff' }}>
+          <Icon name="shuttle" size={36} stroke={1.8} />
+          <p style={{ color: 'var(--t-3)', fontSize: 13, marginTop: 10 }}>Memuat...</p>
+        </div>
       </div>
-    </div>
+    </Shell>
   )
 
-  if (!session) return <Login onLogin={setSession} />
-  if (!sesi) return <SetupSesi onSesiDibuat={setSesi} />
+  if (!session) return <Shell><Login onLogin={setSession} /></Shell>
 
-  if (page === 'checkin') return (
-    <CheckIn sesi={sesi} onLanjut={() => setPage('game')} />
-  )
+  function bukaSesi(s) { setSesi(s); setView('sesi') }
 
-  if (page === 'game') return (
-    <CatatGame
-      sesi={sesi}
-      onBack={() => setPage('checkin')}
-      onLanjut={() => setPage('iuran')}
-    />
-  )
-
-  if (page === 'iuran') return (
-    <Iuran
-      sesi={sesi}
-      onBack={() => setPage('game')}
-      onLanjut={() => setPage('rekap')}
-    />
-  )
-
-  // page === 'rekap'
   return (
-    <Rekap sesi={sesi} onBack={() => setPage('iuran')} />
+    <Shell>
+      {view === 'beranda' && (
+        <Beranda
+          onSesiBaru={() => setView('setup')}
+          onMember={() => setView('member')}
+          onBukaSesi={bukaSesi}
+        />
+      )}
+      {view === 'setup' && (
+        <SetupSesi onBack={() => setView('beranda')} onSesiDibuat={bukaSesi} />
+      )}
+      {view === 'member' && (
+        <DaftarMember onBack={() => setView('beranda')} />
+      )}
+      {view === 'sesi' && sesi && (
+        <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} />
+      )}
+    </Shell>
   )
 }

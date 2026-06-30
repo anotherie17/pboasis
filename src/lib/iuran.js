@@ -1,13 +1,9 @@
-// Hitung iuran sesi — dipakai bersama oleh halaman Iuran & Rekap.
+// Hitung iuran sesi (v2) — cock dibagi PER GAME ke 4 pemainnya.
 //
-// Model:
-//   Member     -> bayar cock saja
-//   Non-member -> bayar tarif lapangan flat + cock
-//
-//   total_biaya_cock    = jumlah_cock_terpakai x harga_cock_per_biji
-//   total_slot          = jumlah partisipasi semua pemain (tiap game = 4 slot)
-//   biaya_cock_per_slot = total_biaya_cock / total_slot
-//   bagian_cock_pemain  = jumlah_game_pemain x biaya_cock_per_slot
+//   biaya_cock_game   = jumlah_cock_game x harga_cock_per_biji
+//   porsi_per_pemain  = biaya_cock_game / 4
+//   porsi_cock_pemain = jumlah porsi dari tiap game yang dia ikut
+//   tagihan_pemain    = (non-member ? tarif_lapangan : 0) + porsi_cock_pemain
 //
 // attendees: [{ player_id, name, is_member, paid }]
 // games:     [{ id, cock_used, played_at, playerIds: [] }]
@@ -17,53 +13,59 @@ export function hitungIuran(sesi, attendees, games) {
   const cockPrice = sesi?.cock_price_per_piece || 0
   const courtFee = sesi?.court_fee_nonmember || 0
 
-  const totalCock = games.reduce((s, g) => s + (g.cock_used || 0), 0)
-  const totalBiayaCock = totalCock * cockPrice
-
-  // Jumlah game per pemain + total slot
+  // Akumulasi porsi cock per pemain + jumlah game
+  const cockShare = {}
   const gameCount = {}
-  let totalSlot = 0
+  let totalCock = 0
+
   for (const g of games) {
+    const n = g.playerIds.length || 4
+    totalCock += g.cock_used || 0
+    const perPlayer = n > 0 ? ((g.cock_used || 0) * cockPrice) / n : 0
     for (const pid of g.playerIds) {
+      cockShare[pid] = (cockShare[pid] || 0) + perPlayer
       gameCount[pid] = (gameCount[pid] || 0) + 1
-      totalSlot++
     }
   }
-  const perSlot = totalSlot > 0 ? totalBiayaCock / totalSlot : 0
 
   const rows = attendees.map(a => {
-    const gamesPlayed = gameCount[a.player_id] || 0
-    const cockShare = Math.round(gamesPlayed * perSlot)
-    const courtShare = a.is_member ? 0 : courtFee
-    const total = courtShare + cockShare
+    const cock = Math.round(cockShare[a.player_id] || 0)
+    const court = a.is_member ? 0 : courtFee
     return {
       player_id: a.player_id,
       name: a.name,
       is_member: a.is_member,
       paid: a.paid,
-      gamesPlayed,
-      cockShare,
-      courtShare,
-      total,
+      gamesPlayed: gameCount[a.player_id] || 0,
+      cockShare: cock,
+      courtShare: court,
+      total: court + cock,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
 
+  const totalBiayaCock = totalCock * cockPrice
   const totalTagihan = rows.reduce((s, r) => s + r.total, 0)
   const totalLunas = rows.filter(r => r.paid).reduce((s, r) => s + r.total, 0)
   const totalBelum = totalTagihan - totalLunas
-
   const jumlahMember = rows.filter(r => r.is_member).length
-  const jumlahNon = rows.length - jumlahMember
 
   return {
     cockPrice, courtFee,
     totalCock, totalBiayaCock,
-    totalSlot, perSlot,
     rows,
     totalTagihan, totalLunas, totalBelum,
-    jumlahMember, jumlahNon,
+    jumlahMember, jumlahNon: rows.length - jumlahMember,
     jumlahGame: games.length,
   }
 }
 
-export const rupiah = n => 'Rp ' + (n || 0).toLocaleString('id-ID')
+export const rupiah = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID')
+
+// "X mnt lalu" ringkas
+export function waktuLalu(iso) {
+  if (!iso) return 'Belum main'
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return 'Baru aja'
+  if (m < 60) return `${m} mnt lalu`
+  return `${Math.floor(m / 60)} jam lalu`
+}
