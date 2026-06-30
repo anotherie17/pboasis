@@ -89,7 +89,7 @@ export function Credit({ style }) {
   return (
     <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t-3)', letterSpacing: 0.3, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, ...style }}>
       <Icon name="shuttle" size={12} stroke={1.8} />
-      Dikembangkan oleh <span style={{ color: 'var(--t-2)', fontWeight: 700 }}>Rie</span>
+      Developed by <span style={{ color: 'var(--t-2)', fontWeight: 700 }}>@ri.rie_</span>
     </p>
   )
 }
