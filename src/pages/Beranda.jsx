@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/ui'
+import { hitungIuran } from '../lib/iuran'
 
 function formatTanggal(iso) {
   if (!iso) return ''
@@ -23,18 +24,43 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
     setLoading(true)
     const { data } = await supabase
       .from('sessions')
-      .select('id, name, date, court_fee_nonmember, cock_price_per_piece, attendees(player_id, paid), games(id)')
+      .select('id, name, date, court_fee_nonmember, cock_price_per_piece, attendees(player_id, is_member_this_session, paid), games(cock_used, game_players(player_id))')
       .order('date', { ascending: false })
       .limit(30)
     setSessions(data || [])
     setLoading(false)
   }
 
+  async function handleLogout() {
+    if (!confirm('Keluar dari akun pengurus?')) return
+    await supabase.auth.signOut()
+    // App akan otomatis balik ke layar Login lewat onAuthStateChange.
+  }
+
+  // Hitung iuran ringkas tiap sesi supaya status bayar akurat
+  // (member yang tagihannya Rp0 tidak dianggap "belum bayar").
+  function ringkas(s) {
+    const attendees = (s.attendees || []).map(a => ({
+      player_id: a.player_id, name: '', is_member: a.is_member_this_session, paid: a.paid,
+    }))
+    const games = (s.games || []).map(g => ({
+      cock_used: g.cock_used, playerIds: (g.game_players || []).map(p => p.player_id),
+    }))
+    const h = hitungIuran(s, attendees, games)
+    return { hadir: attendees.length, totalG: games.length, adaBelum: h.adaBelumBayar }
+  }
+
   return (
     <div className="scroll fade-in" style={{ padding: '18px 18px 28px' }}>
-      <div style={{ padding: '8px 6px 18px' }}>
-        <p className="eyebrow">PB Oasis</p>
-        <h1 className="h1" style={{ marginTop: 4 }}>Beranda</h1>
+      <div style={{ padding: '8px 6px 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <p className="eyebrow">PB Oasis</p>
+          <h1 className="h1" style={{ marginTop: 4 }}>Beranda</h1>
+        </div>
+        <button onClick={handleLogout} title="Keluar"
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 13px', borderRadius: 14, background: 'rgba(255,255,255,0.10)', border: '1px solid var(--glass-border)', color: 'var(--t-2)', fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}>
+          <Icon name="logout" size={16} /> Keluar
+        </button>
       </div>
 
       <button className="glass" onClick={onSesiBaru}
@@ -69,9 +95,7 @@ export default function Beranda({ onSesiBaru, onBukaSesi, onMember }) {
         </div>
       ) : (
         sessions.map(s => {
-          const hadir = s.attendees?.length || 0
-          const totalG = s.games?.length || 0
-          const adaBelum = (s.attendees || []).some(a => !a.paid)
+          const { hadir, totalG, adaBelum } = ringkas(s)
           const today = isToday(s.date)
           return (
             <button key={s.id} onClick={() => onBukaSesi(s)} className="glass"

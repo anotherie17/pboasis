@@ -7,8 +7,8 @@ function Overlay({ children, onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(4,12,32,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={e => e.stopPropagation()} className="fade-in"
-        style={{ width: '100%', maxWidth: 430, maxHeight: '88vh', overflowY: 'auto', background: 'linear-gradient(165deg,#0b2154,#0a1838)', borderTopLeftRadius: 28, borderTopRightRadius: 28, border: '1px solid var(--glass-border)', borderBottom: 'none', padding: '10px 18px calc(24px + env(safe-area-inset-bottom))' }}>
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.25)', margin: '6px auto 14px' }} />
+        style={{ width: '100%', maxWidth: 430, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'linear-gradient(165deg,#0b2154,#0a1838)', borderTopLeftRadius: 28, borderTopRightRadius: 28, border: '1px solid var(--glass-border)', borderBottom: 'none' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.25)', margin: '10px auto 4px', flexShrink: 0 }} />
         {children}
       </div>
     </div>
@@ -46,21 +46,31 @@ export default function TabGame({ sesi }) {
   const ranked = attendees.map(a => ({ ...a, ...stat(a.player_id) }))
     .sort((a, b) => a.count - b.count || (a.last ? new Date(a.last).getTime() : 0) - (b.last ? new Date(b.last).getTime() : 0) || a.name.localeCompare(b.name))
 
+  // Mengembalikan true kalau sukses, false kalau gagal (dipakai sheet buat status "saving").
   async function saveGame(playerIds, cock) {
     const { data: g, error } = await supabase.from('games').insert({ session_id: sesi.id, cock_used: cock }).select().single()
-    if (error || !g) { alert('Gagal menyimpan game.'); return }
-    await supabase.from('game_players').insert(playerIds.map(pid => ({ game_id: g.id, player_id: pid })))
+    if (error || !g) { alert('Gagal menyimpan game. Cek sinyal lalu coba lagi.'); return false }
+    const { error: gpErr } = await supabase.from('game_players').insert(playerIds.map(pid => ({ game_id: g.id, player_id: pid })))
+    if (gpErr) {
+      // Batalkan game-nya supaya tidak ada game "kosong" tanpa pemain di server.
+      await supabase.from('games').delete().eq('id', g.id)
+      alert('Gagal menyimpan pemain. Game dibatalkan, coba lagi.')
+      return false
+    }
     setGames(prev => [...prev, { id: g.id, cock_used: cock, played_at: g.played_at, playerIds: [...playerIds] }])
     setAdding(false)
+    return true
   }
   async function updateCock(gameId, cock) {
-    await supabase.from('games').update({ cock_used: cock }).eq('id', gameId)
+    const { error } = await supabase.from('games').update({ cock_used: cock }).eq('id', gameId)
+    if (error) { alert('Gagal menyimpan perubahan. Coba lagi.'); return }
     setGames(prev => prev.map(g => g.id === gameId ? { ...g, cock_used: cock } : g))
     setEditGame(null)
   }
   async function deleteGame(gameId) {
-    await supabase.from('game_players').delete().eq('game_id', gameId)
-    await supabase.from('games').delete().eq('id', gameId)
+    // game_players ikut terhapus otomatis (ON DELETE CASCADE di database).
+    const { error } = await supabase.from('games').delete().eq('id', gameId)
+    if (error) { alert('Gagal menghapus game. Coba lagi.'); return }
     setGames(prev => prev.filter(g => g.id !== gameId))
     setEditGame(null)
   }
@@ -146,23 +156,37 @@ function CockStepper({ value, setValue }) {
 function AddGameSheet({ ranked, onClose, onSave }) {
   const [sel, setSel] = useState([])
   const [cock, setCock] = useState(1)
+  const [saving, setSaving] = useState(false)
   const saran = ranked.slice(0, 4).map(p => p.player_id)
 
   function toggle(pid) {
+    if (saving) return
     setSel(prev => prev.includes(pid) ? prev.filter(x => x !== pid) : prev.length >= 4 ? prev : [...prev, pid])
   }
 
-  return (
-    <Overlay onClose={onClose}>
-      <h2 className="h2" style={{ color: '#fff', marginBottom: 4 }}>Catat game</h2>
-      <p style={{ fontSize: 13, color: 'var(--t-3)', marginBottom: 14 }}>Pilih 4 pemain · isi cock pas selesai</p>
+  async function handleSave() {
+    if (sel.length !== 4 || saving) return
+    setSaving(true)
+    const ok = await onSave(sel, cock)
+    if (!ok) setSaving(false) // kalau sukses, sheet ditutup oleh induk
+  }
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span className="section-label">⏱ Saran giliran</span>
-        <button onClick={() => setSel(saran)} className="chip on" style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600 }}>Pilih 4 ini</button>
+  const lengkap = sel.length === 4
+
+  return (
+    <Overlay onClose={saving ? () => {} : onClose}>
+      {/* HEADER (tetap) */}
+      <div style={{ padding: '4px 18px 0', flexShrink: 0 }}>
+        <h2 className="h2" style={{ color: '#fff', marginBottom: 4 }}>Catat game</h2>
+        <p style={{ fontSize: 13, color: 'var(--t-3)', marginBottom: 12 }}>Pilih 4 pemain · isi cock pas selesai</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span className="section-label">⏱ Saran giliran</span>
+          <button onClick={() => !saving && setSel(saran)} className="chip on" style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600 }}>Pilih 4 ini</button>
+        </div>
       </div>
 
-      <div style={{ maxHeight: '34vh', overflowY: 'auto', margin: '0 -4px 14px', padding: '0 4px' }}>
+      {/* DAFTAR PEMAIN (satu-satunya area yang scroll) */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px', margin: '0 0 4px' }}>
         {ranked.map(p => {
           const idx = sel.indexOf(p.player_id)
           const on = idx !== -1
@@ -180,28 +204,35 @@ function AddGameSheet({ ranked, onClose, onSave }) {
         })}
       </div>
 
-      <div className="glass" style={{ borderRadius: 18, padding: '12px', marginBottom: 14 }}>
-        <CockStepper value={cock} setValue={setCock} />
+      {/* FOOTER NEMPEL (selalu kelihatan): cock + tombol simpan */}
+      <div style={{ flexShrink: 0, padding: '10px 18px calc(16px + env(safe-area-inset-bottom))', background: '#0a1838', borderTop: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 -12px 24px -8px rgba(0,0,0,0.5)' }}>
+        <div className="glass" style={{ borderRadius: 18, padding: '10px', marginBottom: 12 }}>
+          <CockStepper value={cock} setValue={setCock} />
+        </div>
+        <button className="cta" onClick={handleSave} disabled={saving}
+          style={!lengkap && !saving ? { background: 'rgba(255,255,255,0.12)', boxShadow: 'none', border: '1px solid var(--glass-border)' } : undefined}>
+          {saving ? 'Menyimpan…' : lengkap ? <>Simpan game <Icon name="check" size={18} stroke={2.5} /></> : `Pilih ${4 - sel.length} pemain lagi`}
+        </button>
       </div>
-
-      <button className="cta" disabled={sel.length !== 4} onClick={() => onSave(sel, cock)}>
-        Simpan game · {sel.length}/4
-      </button>
     </Overlay>
   )
 }
 
 function EditGameSheet({ game, nama, onClose, onUpdate, onDelete }) {
   const [cock, setCock] = useState(game.cock_used)
+  const [busy, setBusy] = useState(false)
   return (
-    <Overlay onClose={onClose}>
-      <h2 className="h2" style={{ color: '#fff', marginBottom: 4 }}>Game {game.no}</h2>
-      <p style={{ fontSize: 13, color: 'var(--t-2)', marginBottom: 16 }}>{game.playerIds.map(nama).join(', ')}</p>
-      <div className="glass" style={{ borderRadius: 18, padding: 14, marginBottom: 14 }}><CockStepper value={cock} setValue={setCock} /></div>
-      <button className="cta" onClick={() => onUpdate(game.id, cock)} style={{ marginBottom: 10 }}>Simpan perubahan</button>
-      <button className="btn-ghost" onClick={() => { if (confirm('Hapus game ini?')) onDelete(game.id) }} style={{ color: 'var(--rose)', borderColor: 'rgba(255,140,140,0.3)' }}>
-        <Icon name="trash" size={17} /> Hapus game
-      </button>
+    <Overlay onClose={busy ? () => {} : onClose}>
+      <div style={{ padding: '4px 18px calc(24px + env(safe-area-inset-bottom))', overflowY: 'auto' }}>
+        <h2 className="h2" style={{ color: '#fff', marginBottom: 4 }}>Game {game.no}</h2>
+        <p style={{ fontSize: 13, color: 'var(--t-2)', marginBottom: 16 }}>{game.playerIds.map(nama).join(', ')}</p>
+        <div className="glass" style={{ borderRadius: 18, padding: 14, marginBottom: 14 }}><CockStepper value={cock} setValue={setCock} /></div>
+        <button className="cta" disabled={busy} onClick={async () => { setBusy(true); await onUpdate(game.id, cock); setBusy(false) }} style={{ marginBottom: 10 }}>{busy ? 'Menyimpan…' : 'Simpan perubahan'}</button>
+        <button className="btn-ghost" disabled={busy} onClick={async () => { if (confirm('Hapus game ini? Cock & statistik game ini akan ikut hilang.')) { setBusy(true); await onDelete(game.id) } }} style={{ color: 'var(--rose)', borderColor: 'rgba(255,140,140,0.3)' }}>
+          <Icon name="trash" size={17} /> Hapus game
+        </button>
+        <p style={{ fontSize: 11.5, color: 'var(--t-3)', textAlign: 'center', marginTop: 12 }}>Mau ganti pemainnya? Hapus game ini lalu catat ulang.</p>
+      </div>
     </Overlay>
   )
 }
@@ -210,24 +241,26 @@ function HistorySheet({ playerId, name, games, nama, onClose }) {
   const mine = games.map((g, i) => ({ ...g, no: i + 1 })).filter(g => g.playerIds.includes(playerId)).reverse()
   return (
     <Overlay onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <Avatar name={name} size={44} />
-        <div>
-          <h2 className="h2" style={{ color: '#fff' }}>{name}</h2>
-          <p style={{ fontSize: 13, color: 'var(--t-3)' }}>{mine.length} game dimainkan</p>
-        </div>
-      </div>
-      {mine.length === 0 ? (
-        <p className="muted" style={{ padding: 20, textAlign: 'center', fontSize: 14 }}>Belum main satu game pun.</p>
-      ) : mine.map(g => (
-        <div key={g.id} className="glass" style={{ borderRadius: 16, padding: '12px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 12, color: 'var(--t-3)', marginBottom: 2 }}>Game {g.no}</p>
-            <p style={{ fontSize: 14, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>bareng {g.playerIds.filter(id => id !== playerId).map(nama).join(', ')}</p>
+      <div style={{ padding: '4px 18px calc(24px + env(safe-area-inset-bottom))', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <Avatar name={name} size={44} />
+          <div>
+            <h2 className="h2" style={{ color: '#fff' }}>{name}</h2>
+            <p style={{ fontSize: 13, color: 'var(--t-3)' }}>{mine.length} game dimainkan</p>
           </div>
-          {g.cock_used > 0 && <span className="badge-cock">{g.cock_used} cock</span>}
         </div>
-      ))}
+        {mine.length === 0 ? (
+          <p className="muted" style={{ padding: 20, textAlign: 'center', fontSize: 14 }}>Belum main satu game pun.</p>
+        ) : mine.map(g => (
+          <div key={g.id} className="glass" style={{ borderRadius: 16, padding: '12px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12, color: 'var(--t-3)', marginBottom: 2 }}>Game {g.no}</p>
+              <p style={{ fontSize: 14, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>bareng {g.playerIds.filter(id => id !== playerId).map(nama).join(', ')}</p>
+            </div>
+            {g.cock_used > 0 && <span className="badge-cock">{g.cock_used} cock</span>}
+          </div>
+        ))}
+      </div>
     </Overlay>
   )
 }

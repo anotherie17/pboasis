@@ -1,6 +1,10 @@
-# MabarKas — Handover (Struktur v2)
+# MabarKas — Handover (Struktur v3)
 
 Salin seluruh isi ini ke sesi Claude yang baru.
+
+> **v3 (30 Juni 2026)** — hasil audit menyeluruh + perbaikan bertahap (6 sprint).
+> Bagian **CHANGELOG v3** di bawah merangkum semua yang berubah. Aplikasi sudah
+> **lulus `npm run build`** tanpa error.
 
 ---
 
@@ -24,9 +28,10 @@ komunitas **PB Oasis**. Dioperasikan 1 pengurus lewat HP.
 
 | Komponen | Detail |
 |---|---|
-| Frontend | React + Vite (PWA), inline-style + CSS variables |
+| Frontend | React 19 + Vite 6 (**PWA installable**), inline-style + CSS variables |
 | Backend | Supabase |
 | PDF | jsPDF (vendor di `public/jspdf.umd.min.js`, dipanggil `window.jspdf.jsPDF`) |
+| PWA | `public/manifest.webmanifest` + `public/sw.js` (service worker), didaftarkan di `main.jsx` |
 | GitHub | `https://github.com/anotherie17/pboasis.git` |
 | Folder lokal | `C:\DATA\mabarkas` |
 | Bahasa UI | Indonesia |
@@ -40,131 +45,209 @@ komunitas **PB Oasis**. Dioperasikan 1 pengurus lewat HP.
 - **URL:** `https://geowkpxcwftvnbtdblol.supabase.co`
 - **Auth:** `pboasis@mabarkas.app` / `admin`
 
-### Tabel
+### Tabel (skema asli — sudah diverifikasi via MCP)
 
 ```
-players        -> id, name, created_at
-member_periods -> id, period_number, started_at, created_at        (DIPAKAI v2)
-member_list    -> period_id, player_id                              (DIPAKAI v2)
-sessions       -> id, name, date, court_fee_nonmember, cock_price_per_piece, created_at
-attendees      -> session_id, player_id, is_member_this_session, paid, checked_in_at
-games          -> id, session_id, cock_used (INT >= 0), played_at   (BUKAN lagi 0|1)
-game_players   -> game_id, player_id
+players        -> id(uuid), name(text, UNIQUE), created_at
+member_periods -> id(uuid), period_number(int), started_at(date), created_at
+member_list    -> period_id(uuid), player_id(uuid)            [PK gabungan]
+sessions       -> id(uuid), name(text), date(date), court_fee_nonmember(int),
+                  cock_price_per_piece(int), created_at
+attendees      -> session_id, player_id [PK gabungan],
+                  is_member_this_session(bool), paid(bool), checked_in_at
+games          -> id(uuid), session_id, cock_used(int, CHECK >= 0), played_at
+game_players   -> game_id, player_id [PK gabungan]
 ```
 
-⚠️ **RLS masih OFF**. Aman untuk 1 pengurus. Sebelum go-live/multi-user perlu diaktifkan + policy.
+**Relasi penting (ON DELETE CASCADE — sudah diverifikasi):**
+- Hapus `sessions` → `attendees`, `games`, `game_players`-nya ikut terhapus otomatis.
+- Hapus `games` → `game_players`-nya ikut terhapus otomatis.
+- `players` tidak pernah dihapus oleh app.
+
+⚠️ **RLS masih OFF** (sengaja — aman untuk 1 pengurus). SQL untuk menyalakannya
+sudah disiapkan di bagian **CHECKLIST SEBELUM GO-LIVE**. **Jangan dijalankan**
+sampai siap multi-user (bisa mengunci app kalau policy salah).
 
 ---
 
-## MODEL IURAN (v2 — DIKOREKSI)
+## MODEL IURAN (v2 — tetap berlaku)
 
 Tagihan per orang = **biaya lapangan** (kalau non-member) **+ porsi cock yang dia pakai**.
 
-**Cock dihitung PER GAME**, bukan dikolam satu sesi:
 ```
 biaya_cock_game   = jumlah_cock_game x harga_cock_per_biji
-porsi_per_pemain  = biaya_cock_game / 4          (tiap game selalu 4 pemain)
+porsi_per_pemain  = biaya_cock_game / 4          (tiap game 4 pemain)
 porsi_cock_pemain = jumlah semua porsi dari game yang dia ikut
 tagihan_pemain    = (non-member ? tarif_lapangan : 0) + porsi_cock_pemain
 ```
 
-- Cock per game **bisa berapa aja** (1, 2, 3...), diisi **pas game selesai** (tentatif).
-- Tarif lapangan = fixed cost dari panitia, **flat per non-member** (mis. Rp15.000). Member tidak kena lapangan.
-- Karena dihitung per game, orang yang **pulang duluan** langsung bisa ditagih dari
-  game yang sudah dia mainkan. Bayar = **final**, tidak ada tagihan susulan.
 - Iuran = hasil komputasi (`src/lib/iuran.js`), tidak disimpan. Yang disimpan cuma `paid`.
+- **v3:** pembulatan sekarang **presisi** (metode *largest remainder*) — jumlah porsi
+  semua pemain **persis** sama dengan total biaya cock (tidak meleset rupiah).
 
 ---
 
-## MODEL MEMBER (v2)
+## MODEL MEMBER (v3 — diperjelas)
 
-- Member berlaku **per periode 1 bulan (4x main)**. Tiap bulan dilist ulang.
-- Ada **layar Daftar Member**: centang siapa member periode ini (tabel member_periods + member_list).
-- Pas **check-in**, status member **otomatis** kebawa dari periode aktif (badge nyala sendiri).
+- Member berlaku **per bulan**. Tiap bulan dibuat **satu daftar** member.
+- Layar **Daftar Member** menampilkan **nama bulan** (mis. "Member Juni 2026"),
+  bukan lagi "Periode N".
+- Tombol **"Bulan ini"** hanya muncul kalau daftar bulan berjalan belum ada;
+  ada **konfirmasi** sebelum membuat daftar baru → **tidak bisa numpuk** lagi.
+- Pas **check-in**, status member otomatis dari **daftar yang berlaku untuk
+  TANGGAL sesi** (bukan sekadar yang terbaru) — jadi sesi lama tetap akurat.
   Operator tetap bisa **override** per sesi (`attendees.is_member_this_session`).
 
 ---
 
-## DESAIN (v2) — GLASSMORPHISM "MEWAH"
+## DESAIN (v2) — GLASSMORPHISM "MEWAH" (tetap)
 
-Arah visual dikunci: **glassmorphism premium**. Wajib dipertahankan konsisten.
-- **Background**: navy berlapis + gradient radial (royal blue glow) + 2 "blob" blur
-  yang ketangkep di balik kaca. Base `#0a1838`.
-- **Kaca (.glass)**: `background rgba(255,255,255,0.10)` + `backdrop-filter blur(22px) saturate(160%)`
-  + border `rgba(255,255,255,0.18)` + inner highlight `inset 0 1px 0 rgba(255,255,255,0.25)`.
-- **Tipografi**: heading `Plus Jakarta Sans` (700–800), body `Inter`. Teks putih + tingkat opasitas.
-- **Sudut**: membulat besar (18–26px kartu, 46px frame). Shadow lembut, no flat.
-- **Aksen**: tombol utama gradient `#2f86ff → #1368C8 → #0e54a6` + glow.
-- **Status**: tag "Berlangsung" hijau mint, "Selesai" abu transparan; badge cock kuning lembut.
-- **Tab bawah**: kaca, tab aktif "nyala" gradient biru + inner highlight.
-- **Layout**: di HP full-screen; di desktop **ketengah dalam bingkai HP** (max-width ~430px).
-- Ikon: pakai set ikon proper (mis. lucide / SVG inline), bukan emoji.
+Arah visual dikunci: glassmorphism premium. Base `#0a1838`, kaca `rgba(255,255,255,0.10)`
++ `backdrop-filter blur(18px)` (v3: diturunkan dari 22px biar lebih ringan di HP lama),
+border `rgba(255,255,255,0.18)`. Heading `Plus Jakarta Sans`, body `Inter`.
+Teks: `--t-2 0.68`, `--t-3 0.58` (v3: kontras dinaikkan biar lebih kebaca).
+Tombol utama gradient biru + glow. Tab bawah kaca. Layout HP full-screen, desktop
+ketengah bingkai HP (max ~430px). Ikon SVG (`src/components/ui.jsx`), bukan emoji.
 
-> Referensi visual final ada di mockup yang disetujui user (Beranda + tab Game).
-
-## ALUR & STRUKTUR LAYAR (v2)
+## ALUR & STRUKTUR LAYAR (v3)
 
 ```
 Login
   -> Beranda
        - Sesi baru
-       - Riwayat sesi (buka sesi lama, update bayar nyusul)
        - Daftar member (atur bulanan)
-  -> (buka satu sesi) Workspace dengan 4 TAB di bawah, bebas pindah:
-       [ Hadir ] [ Game ] [ Iuran ] [ Rekap ]
+       - Riwayat sesi
+       - [v3] Tombol KELUAR (logout) di pojok header
+  -> (buka satu sesi) Workspace:
+       - [v3] Tombol EDIT sesi di header (ubah nama/tanggal/harga, atau HAPUS sesi)
+       - 4 TAB bawah: [ Hadir ] [ Game ] [ Iuran ] [ Rekap ]
 ```
 
-- **Hadir** — catat orang dateng (member auto, bisa override). Min 4 buat mulai main.
-- **Game** — **list match** (numpuk ke bawah). Catat game baru: pilih 4 pemain
-  (ada **saran giliran** = gabungan paling sedikit main + paling lama nunggu),
-  isi jumlah cock pas selesai. Tap nama pemain -> **history dia di sesi itu**
-  (main berapa game, bareng siapa, total tagihan). History cukup **dalam sesi** saja.
-- **Iuran** — tagihan tiap orang (lapangan + cock dia), tandai **Lunas/Belum** kapan aja.
-- **Rekap** — ringkasan sesi + **export PDF** (buat share grup WA).
+- **Hadir** — catat orang dateng (member auto by tanggal sesi, bisa override). Min 4 buat main.
+  [v3] Checkout pakai ikon "×" + konfirmasi; **diblokir kalau pemain sudah punya game**.
+- **Game** — list match. Catat game: pilih 4 (saran giliran) + cock.
+  [v3] Tombol **Simpan nempel di bawah sheet** (selalu kelihatan) + **anti dobel-tap**.
+  Ganti pemain game = hapus lalu catat ulang.
+- **Iuran** — tagihan tiap orang, tandai Lunas/Belum.
+- **Rekap** — ringkasan + export PDF ([v3] tahan-banting di iOS).
 
 ---
 
-## PERUBAHAN DARI v1 (yang sudah terlanjur dibuat)
-
-1. `games.cock_used` jadi **integer bebas** (bukan 0/1). Perlu drop check constraint.
-2. Hitung cock jadi **per game dibagi 4**, bukan dikolam total sesi. (`iuran.js` ditulis ulang.)
-3. Tambah **Beranda** (list sesi) + **Daftar Member** + **bottom tab** dalam sesi.
-4. Sesi **bisa dibuka ulang** dari riwayat.
-5. Tampilan **diketengahin** pakai bingkai selebar HP (app shell).
-6. Member jadi **bulanan** beneran (member_periods dipakai).
-
----
-
-## FILE STRUKTUR (target v2)
+## FILE STRUKTUR (v3)
 
 ```
 mabarkas\
-├── index.html              (load jspdf.umd.min.js)
-├── public\jspdf.umd.min.js (vendor — jangan hapus)
+├── index.html              (load jspdf + link manifest + apple-touch-icon)
+├── public\
+│   ├── jspdf.umd.min.js    (vendor — jangan hapus)
+│   ├── manifest.webmanifest[BARU v3]
+│   ├── sw.js               (service worker)         [BARU v3]
+│   └── icon-192/512/maskable-512.png                [BARU v3]
 └── src\
-    ├── main.jsx
-    ├── App.jsx             (auth + routing: Beranda <-> Sesi workspace)
-    ├── index.css           (+ app shell ketengah / bingkai HP)
+    ├── main.jsx            (+ daftar service worker)
+    ├── App.jsx             (auth + routing; passes onSesiUpdated)
+    ├── index.css           (kontras & blur disesuaikan)
+    ├── components\ui.jsx   (+ ikon logout, edit)
     ├── lib\
     │   ├── supabase.js
-    │   └── iuran.js         (hitung per-game split — v2)
+    │   └── iuran.js         (pembulatan presisi + helper adaBelumBayar, namaBulan)
     └── pages\
         ├── Login.jsx
-        ├── Beranda.jsx      (list sesi + pintu ke member)        [BARU]
-        ├── DaftarMember.jsx (atur member bulanan)                [BARU]
-        ├── SetupSesi.jsx    (nama + tanggal + harga)
-        ├── SesiWorkspace.jsx(shell + bottom tab)                 [BARU]
-        ├── TabHadir.jsx     (eks CheckIn)
-        ├── TabGame.jsx      (eks CatatGame — list match + history)
-        ├── TabIuran.jsx     (eks Iuran)
-        └── TabRekap.jsx     (eks Rekap)
+        ├── Beranda.jsx      (+ logout, status bayar akurat)
+        ├── DaftarMember.jsx (member bulanan, anti-numpuk)
+        ├── SetupSesi.jsx    (+ pesan kalau sesi tanggal sama sudah ada)
+        ├── SesiWorkspace.jsx(+ Edit/Hapus sesi)
+        ├── TabHadir.jsx     (checkout aman, normalisasi nama)
+        ├── TabGame.jsx      (simpan nempel, anti dobel, rollback)
+        ├── TabIuran.jsx     (error handling tandai lunas)
+        └── TabRekap.jsx     (PDF iOS-friendly)
 ```
+
+> File v1 lama (CheckIn/CatatGame/Iuran/Rekap.jsx) **sudah dihapus** (dead code).
 
 ---
 
-## PROGRESS
+## CHANGELOG v3 (apa yang diperbaiki)
 
-- ✅ Sprint 1–5 (v1) selesai: Login, Setup, Check-in, Catat Game, Iuran, Rekap+PDF.
-- 🔧 **Rework v2** (lagi dikerjain): Beranda + bottom tab, member bulanan, cock per-game, layout ketengah.
+**3 temuan user:**
+1. **Tombol simpan game** kini menempel di dasar sheet (sticky), satu area scroll,
+   selalu kelihatan; saat <4 pemain tombol tetap tampil ("Pilih N pemain lagi").
+   + **anti dobel-tap** (status "Menyimpan…").
+2. **Konsep "periode" disederhanakan** jadi **nama bulan**; tombol bulan baru pakai
+   konfirmasi & tidak bisa numpuk; pemilihan daftar member kini **pasti** (by tanggal sesi).
+   Data: **4 periode kosong yang nyangkut sudah dibersihkan**; 2 member yang salah
+   ditandai non-member sudah dibetulkan.
+3. **Tombol Logout** ditambahkan di Beranda.
 
-*Handover v2 — 29 Juni 2026, sesudah wawancara alur sama user.*
+**Critical:**
+- **Checkout aman**: pemain yang sudah punya game **tidak bisa dikeluarkan**
+  (cegah uang hilang & nama jadi "—"). Checkout biasa pakai konfirmasi.
+
+**Bug:**
+- Simpan game: cek error pada langkah pemain; kalau gagal, game **dibatalkan** (rollback).
+- Error handling pada tandai-bayar, toggle member, check-in, tambah pemain
+  (kalau gagal simpan, tampilan dikembalikan + pesan).
+- Beranda "ada belum bayar" kini akurat — member bertagihan **Rp0 tidak dihitung** nunggak.
+
+**Fungsi baru:**
+- **Edit sesi** (nama/tanggal/harga cock/tarif) + **Hapus sesi** (dengan konfirmasi ganda).
+
+**Polish:**
+- Ikon hadir/checkout diperjelas (+ / ×), area tap diperbesar (38px).
+- Kontras teks dinaikkan; blur diturunkan biar ringan.
+- Pembulatan iuran presisi.
+- Nama pemain dinormalkan (trim + spasi ganda) & cek duplikat tanpa peduli huruf besar/kecil.
+
+**Produksi:**
+- **PWA installable** (manifest + ikon + service worker) — bisa "Add to Home Screen".
+  Service worker hanya cache aset app, **bukan** data Supabase (angka selalu fresh).
+- **Export PDF** dibuat tahan-banting di iOS Safari (buka di tab baru kalau perlu).
+
+---
+
+## CHECKLIST SEBELUM GO-LIVE (belum dikerjakan — sengaja)
+
+**1) Nyalakan RLS + policy** (WAJIB sebelum dipakai banyak orang).
+Karena app login dengan 1 akun pengurus (role `authenticated`), policy paling
+sederhana: izinkan akun login melakukan semua, tutup untuk publik (`anon`).
+Jalankan di Supabase SQL editor **hanya saat siap**:
+
+```sql
+-- Aktifkan RLS
+ALTER TABLE public.players        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.member_periods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.member_list    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendees      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.games          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_players   ENABLE ROW LEVEL SECURITY;
+
+-- Policy: hanya user yang sudah login boleh baca/tulis semua
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['players','member_periods','member_list','sessions','attendees','games','game_players']
+  LOOP
+    EXECUTE format('CREATE POLICY %I_auth_all ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true);', t, t);
+  END LOOP;
+END $$;
+```
+
+> Setelah ini, app yang login tetap jalan normal, tapi anon key tidak bisa
+> mengubah data lagi. Uji dulu setelah menyalakannya.
+
+**2) Uji export PDF di iPhone** (Safari) — pastikan PDF kebuka/bisa di-share.
+
+**3) (opsional) Offline antrian** — saat ini kalau sinyal jelek, aksi yang gagal
+diberi pesan & dikembalikan. Antrian offline penuh = pekerjaan besar, pertimbangkan nanti.
+
+---
+
+## CATATAN MODEL (yang belum diubah, by design)
+
+- **Saran giliran** mengasumsikan **1 lapangan** bergantian (gabungan paling sedikit
+  main + paling lama nunggu). Kalau PB Oasis pakai >1 lapangan barengan, model ini
+  perlu dirombak (belum dikonfirmasi user — tanyakan dulu sebelum mengubah).
+- "Berlangsung vs Selesai" di Beranda ditentukan dari `date == hari ini`.
+
+*Handover v3 — 30 Juni 2026, sesudah audit + 6 sprint perbaikan.*

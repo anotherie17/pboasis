@@ -88,7 +88,18 @@ export default function TabRekap({ sesi }) {
         doc.setTextColor(...(r.paid ? [5, 150, 105] : [220, 38, 38])); doc.text(r.paid ? 'Lunas' : 'Belum', cols[5].x, y + 5, { align: 'right' }); y += 7
       })
       doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(...gray); doc.text(`Dibuat ${new Date().toLocaleString('id-ID')} · MabarKas`, M, 290)
-      doc.save(`Rekap ${(sesi.name || 'Sesi').replace(/[^\w\s-]/g, '').trim()} ${sesi.date}.pdf`)
+      const fname = `Rekap ${(sesi.name || 'Sesi').replace(/[^\w\s-]/g, '').trim()} ${sesi.date}.pdf`
+      // iOS Safari sering tidak mengunduh lewat doc.save(); buka di tab baru
+      // supaya bisa di-share/simpan dari sana.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      if (isIOS) {
+        const url = doc.output('bloburl')
+        const w = window.open(url, '_blank')
+        if (!w) doc.save(fname) // kalau pop-up diblokir, coba cara biasa
+      } else {
+        doc.save(fname)
+      }
     } catch (e) { alert('Gagal membuat PDF: ' + e.message) } finally { setExporting(false) }
   }
 

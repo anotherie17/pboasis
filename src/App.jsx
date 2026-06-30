@@ -60,7 +60,7 @@ export default function App() {
         <DaftarMember onBack={() => setView('beranda')} />
       )}
       {view === 'sesi' && sesi && (
-        <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} />
+        <SesiWorkspace sesi={sesi} onExit={() => { setView('beranda'); setSesi(null) }} onSesiUpdated={setSesi} />
       )}
     </Shell>
   )

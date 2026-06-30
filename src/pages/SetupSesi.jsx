@@ -37,7 +37,11 @@ export default function SetupSesi({ onSesiDibuat, onBack }) {
     setLoading(true); setError('')
 
     const { data: existing } = await supabase.from('sessions').select('*').eq('date', date).maybeSingle()
-    if (existing) { onSesiDibuat(existing); return }
+    if (existing) {
+      setLoading(false)
+      alert(`Sudah ada sesi "${existing.name || 'Sesi'}" di tanggal ini. Sesi itu yang dibuka ya (harga/nama yang barusan diketik tidak dipakai). Mau sesi terpisah? Ganti tanggalnya.`)
+      onSesiDibuat(existing); return
+    }
 
     const { data, error: err } = await supabase.from('sessions').insert({
       name: name.trim(), date,

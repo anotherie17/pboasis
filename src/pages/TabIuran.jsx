@@ -24,7 +24,12 @@ export default function TabIuran({ sesi }) {
   async function toggleBayar(playerId, paid) {
     const v = !paid
     setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, paid: v } : a))
-    await supabase.from('attendees').update({ paid: v }).eq('session_id', sesi.id).eq('player_id', playerId)
+    const { error } = await supabase.from('attendees').update({ paid: v }).eq('session_id', sesi.id).eq('player_id', playerId)
+    if (error) {
+      // Kembalikan tampilan kalau gagal simpan ke server (mis. sinyal jelek).
+      setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, paid } : a))
+      alert('Gagal menyimpan status bayar. Cek sinyal lalu coba lagi.')
+    }
   }
 
   if (loading) return <p className="muted" style={{ padding: 30, textAlign: 'center' }}>Memuat...</p>

@@ -13,23 +13,41 @@ export function hitungIuran(sesi, attendees, games) {
   const cockPrice = sesi?.cock_price_per_piece || 0
   const courtFee = sesi?.court_fee_nonmember || 0
 
-  // Akumulasi porsi cock per pemain + jumlah game
+  // Akumulasi porsi cock (mentah, masih pecahan) per pemain + jumlah game
   const cockShare = {}
   const gameCount = {}
   let totalCock = 0
 
   for (const g of games) {
-    const n = g.playerIds.length || 4
+    const ids = g.playerIds || []
+    const n = ids.length || 4
     totalCock += g.cock_used || 0
     const perPlayer = n > 0 ? ((g.cock_used || 0) * cockPrice) / n : 0
-    for (const pid of g.playerIds) {
+    for (const pid of ids) {
       cockShare[pid] = (cockShare[pid] || 0) + perPlayer
       gameCount[pid] = (gameCount[pid] || 0) + 1
     }
   }
 
-  const rows = attendees.map(a => {
-    const cock = Math.round(cockShare[a.player_id] || 0)
+  // --- Pembulatan presisi (largest remainder) ---
+  // Tiap porsi dibulatkan, tapi sisa rupiah dibagi ke yang pecahannya paling besar,
+  // supaya JUMLAH semua porsi PERSIS sama dengan total biaya cock yang ditagihkan
+  // (tidak meleset beberapa rupiah karena pembulatan).
+  const raw = attendees.map(a => cockShare[a.player_id] || 0)
+  const floors = raw.map(x => Math.floor(x))
+  const targetSum = Math.round(raw.reduce((s, x) => s + x, 0))
+  let sisa = targetSum - floors.reduce((s, x) => s + x, 0)
+  const add = new Array(raw.length).fill(0)
+  if (sisa > 0) {
+    const byFrac = raw
+      .map((x, i) => ({ i, f: x - Math.floor(x) }))
+      .sort((a, b) => b.f - a.f)
+    for (let k = 0; k < sisa && byFrac.length; k++) add[byFrac[k % byFrac.length].i] += 1
+  }
+  const cockRounded = floors.map((f, i) => f + add[i])
+
+  const rows = attendees.map((a, i) => {
+    const cock = cockRounded[i]
     const court = a.is_member ? 0 : courtFee
     return {
       player_id: a.player_id,
@@ -48,6 +66,9 @@ export function hitungIuran(sesi, attendees, games) {
   const totalLunas = rows.filter(r => r.paid).reduce((s, r) => s + r.total, 0)
   const totalBelum = totalTagihan - totalLunas
   const jumlahMember = rows.filter(r => r.is_member).length
+  // Orang yang masih punya tagihan > 0 tapi belum bayar (dipakai Beranda biar
+  // member bertagihan Rp0 tidak bikin sesi terlihat "ada belum bayar").
+  const adaBelumBayar = rows.some(r => !r.paid && r.total > 0)
 
   return {
     cockPrice, courtFee,
@@ -56,6 +77,7 @@ export function hitungIuran(sesi, attendees, games) {
     totalTagihan, totalLunas, totalBelum,
     jumlahMember, jumlahNon: rows.length - jumlahMember,
     jumlahGame: games.length,
+    adaBelumBayar,
   }
 }
 
@@ -68,4 +90,10 @@ export function waktuLalu(iso) {
   if (m < 1) return 'Baru aja'
   if (m < 60) return `${m} mnt lalu`
   return `${Math.floor(m / 60)} jam lalu`
+}
+
+// Nama bulan Indonesia dari tanggal ISO (yyyy-mm-dd) -> "Juni 2026"
+export function namaBulan(iso) {
+  if (!iso) return ''
+  return new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 }

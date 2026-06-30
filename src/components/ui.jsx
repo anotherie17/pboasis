@@ -37,6 +37,8 @@ const P = {
   user: 'M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM18 8v6M21 11h-6',
   calendar: 'M5 6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM5 9h14M8 3v3M16 3v3',
   shuttle: 'M12 3l3 9-3 9-3-9zM9 12h6',
+  logout: 'M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9',
+  edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
 }
 
 export function Icon({ name, size = 22, stroke = 2, style, fill }) {

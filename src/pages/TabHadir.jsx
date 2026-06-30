@@ -2,10 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Avatar, Icon } from '../components/ui'
 
+// Rapikan nama: buang spasi depan/belakang + spasi ganda jadi satu.
+const rapikan = s => s.trim().replace(/\s+/g, ' ')
+
 export default function TabHadir({ sesi }) {
   const [players, setPlayers] = useState([])
   const [attendees, setAttendees] = useState([])
   const [memberSet, setMemberSet] = useState(new Set())
+  const [gameCount, setGameCount] = useState({}) // player_id -> jumlah game di sesi ini
   const [search, setSearch] = useState('')
   const [newName, setNewName] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -18,46 +22,76 @@ export default function TabHadir({ sesi }) {
 
   async function fetchData() {
     setLoading(true)
-    const [{ data: pData }, { data: aData }, { data: per }] = await Promise.all([
+    // Periode member yang berlaku untuk TANGGAL sesi ini (bukan sekadar yang terbaru).
+    // Jadi sesi lama tetap memakai daftar member yang benar saat sesi itu.
+    const [{ data: pData }, { data: aData }, { data: per }, { data: gms }] = await Promise.all([
       supabase.from('players').select('id, name').order('name'),
       supabase.from('attendees').select('player_id, is_member_this_session, paid').eq('session_id', sesi.id),
-      supabase.from('member_periods').select('id').order('started_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('member_periods').select('id').lte('started_at', sesi.date).order('started_at', { ascending: false }).order('period_number', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('games').select('id, game_players(player_id)').eq('session_id', sesi.id),
     ])
     setPlayers(pData || [])
-    setAttendees(aData || [])
+    setAttendees((aData || []).filter(Boolean))
     if (per) {
       const { data: ml } = await supabase.from('member_list').select('player_id').eq('period_id', per.id)
       setMemberSet(new Set((ml || []).map(m => m.player_id)))
+    } else {
+      setMemberSet(new Set())
     }
+    const gc = {}
+    for (const g of (gms || [])) for (const gp of (g.game_players || [])) gc[gp.player_id] = (gc[gp.player_id] || 0) + 1
+    setGameCount(gc)
     setLoading(false)
   }
 
   async function checkIn(player) {
     const isMember = memberSet.has(player.id)
-    const { data } = await supabase.from('attendees')
+    const { data, error } = await supabase.from('attendees')
       .insert({ session_id: sesi.id, player_id: player.id, is_member_this_session: isMember })
       .select().single()
+    if (error || !data) { alert('Gagal mencatat kehadiran. Cek sinyal lalu coba lagi.'); return }
     setAttendees(prev => [...prev, data])
   }
+
   async function checkOut(playerId) {
-    await supabase.from('attendees').delete().eq('session_id', sesi.id).eq('player_id', playerId)
+    const n = gameCount[playerId] || 0
+    if (n > 0) {
+      alert(`Pemain ini sudah main ${n} game. Hapus dulu game-game itu di tab Game sebelum mengeluarkannya, supaya tagihan & catatan tidak kacau.`)
+      return
+    }
+    if (!confirm('Keluarkan pemain ini dari daftar hadir?')) return
+    const { error } = await supabase.from('attendees').delete().eq('session_id', sesi.id).eq('player_id', playerId)
+    if (error) { alert('Gagal mengeluarkan. Coba lagi.'); return }
     setAttendees(prev => prev.filter(a => a.player_id !== playerId))
   }
+
   async function toggleMember(playerId, cur) {
     const v = !cur
     setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, is_member_this_session: v } : a))
-    await supabase.from('attendees').update({ is_member_this_session: v }).eq('session_id', sesi.id).eq('player_id', playerId)
+    const { error } = await supabase.from('attendees').update({ is_member_this_session: v }).eq('session_id', sesi.id).eq('player_id', playerId)
+    if (error) {
+      setAttendees(prev => prev.map(a => a.player_id === playerId ? { ...a, is_member_this_session: cur } : a))
+      alert('Gagal menyimpan. Coba lagi.')
+    }
   }
+
   async function tambah() {
-    const nama = newName.trim()
+    const nama = rapikan(newName)
     if (!nama) return
+    // Cek duplikat tanpa peduli huruf besar/kecil & spasi.
+    const dup = players.find(p => rapikan(p.name).toLowerCase() === nama.toLowerCase())
+    if (dup) {
+      alert(`Nama "${dup.name}" sudah ada di daftar. Pakai yang itu aja ya.`)
+      setNewName(''); setShowAdd(false)
+      return
+    }
     setSaving(true)
     const { data, error } = await supabase.from('players').insert({ name: nama }).select().single()
-    if (!error) {
+    if (!error && data) {
       setPlayers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setNewName(''); setShowAdd(false)
       await checkIn(data)
-    } else alert('Nama sudah ada atau gagal ditambahkan.')
+    } else alert('Gagal menambah pemain. Mungkin namanya sudah ada.')
     setSaving(false)
   }
 
@@ -117,15 +151,19 @@ export default function TabHadir({ sesi }) {
           {hadirList.map((p, i) => {
             const a = attendees.find(x => x.player_id === p.id)
             const isMember = a?.is_member_this_session
+            const sudahMain = (gameCount[p.id] || 0) > 0
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', background: 'rgba(90,160,255,0.10)', borderBottom: i < hadirList.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
                 <Avatar name={p.name} size={40} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 15, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
-                  <p style={{ fontSize: 12, color: isMember ? '#bdd8ff' : 'var(--t-3)', marginTop: 1 }}>{isMember ? 'Member' : 'Non-member'}</p>
+                  <p style={{ fontSize: 12, color: isMember ? '#bdd8ff' : 'var(--t-3)', marginTop: 1 }}>{isMember ? 'Member' : 'Non-member'}{sudahMain ? ` · ${gameCount[p.id]} game` : ''}</p>
                 </div>
                 <button onClick={() => toggleMember(p.id, isMember)} className={`chip ${isMember ? 'on' : ''}`} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600 }}>{isMember ? 'Member' : 'Member?'}</button>
-                <button onClick={() => checkOut(p.id)} style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg,#5aa0f0,#1368C8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Icon name="check" size={17} stroke={2.5} /></button>
+                <button onClick={() => checkOut(p.id)} title="Keluarkan dari hadir"
+                  style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: sudahMain ? 'rgba(255,255,255,0.06)' : 'rgba(255,140,140,0.14)', border: '1px solid rgba(255,140,140,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: sudahMain ? 'var(--t-3)' : 'var(--rose)' }}>
+                  <Icon name="x" size={17} stroke={2.4} />
+                </button>
               </div>
             )
           })}
@@ -139,7 +177,8 @@ export default function TabHadir({ sesi }) {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < belumList.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
               <Avatar name={p.name} size={40} />
               <p style={{ flex: 1, minWidth: 0, fontSize: 15, color: 'var(--t-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
-              <button onClick={() => checkIn(p)} style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: 'rgba(255,255,255,0.08)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-2)' }}><Icon name="plus" size={17} /></button>
+              <button onClick={() => checkIn(p)} title="Catat hadir"
+                style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg,#5aa0f0,#1368C8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Icon name="plus" size={18} stroke={2.4} /></button>
             </div>
           ))}
         </div>
